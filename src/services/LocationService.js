@@ -1,7 +1,7 @@
  import Geolocation from 'react-native-geolocation-service';
  import {Platform, Alert, Linking} from 'react-native';
  import {PERMISSIONS, request, check, RESULTS} from 'react-native-permissions';
- import firestore Service from './FirestoreService';
+ import firestoreService from './FirestoreService';
  import authService from './AuthService';
 
  class LocationService {
@@ -299,5 +299,5 @@ isLocationTrackingActive() {
 }
 
 // Create and export singleton instance
-const locationService = newLocationService();
+const locationService = new LocationService();
 export default locationService;
