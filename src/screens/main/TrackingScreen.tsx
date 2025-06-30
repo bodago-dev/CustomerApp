@@ -11,24 +11,25 @@
    Dimensions,
    ActivityIndicator,
  } from 'react-native';
+ import { PERMISSIONS, request, RESULTS } from 'react-native-permissions';
  import Ionicons from 'react-native-vector-icons/Ionicons';
  import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
  import locationService from '../../services/LocationService';
  import firestoreService from '../../services/FirestoreService';
 
  const TrackingScreen = ({ route, navigation }) => {
-   const { deliveryId, packageDetails, pickupLocation, dropoffLocation, selectedVehicle, fareDetails, delivery } = route.params || {};
-   const [isLoading, setIsLoading] = useState(true);
-   const [deliveryStatus, setDeliveryStatus] = useState('searching');
-   const [deliveryData, setDeliveryData] = useState(delivery);
-   const [driverInfo, setDriverInfo] = useState(null);
-   const [driverLocation, setDriverLocation] = useState(null);
-   const [customerLocation,setCustomerLocation] = useState(null);
-   const [statusUpdates, setStatusUpdates] = useState([]);
-   const [estimatedArrival, setEstimatedArrival] = useState('');
-   const mapRef = useRef(null);
-   const [unsubscribeDriver, setUnsubscribeDriver] = useState(null);
-   const [unsubscribeDelivery, setUnsubscribeDelivery] = useState(null);
+    const { deliveryId, packageDetails, pickupLocation, dropoffLocation, selectedVehicle, fareDetails } = route.params || {};
+    const [isLoading, setIsLoading] = useState(true);
+    const [deliveryStatus, setDeliveryStatus] = useState("searching");
+    const [deliveryData, setDeliveryData] = useState(route.params?.delivery || {});
+    const [driverInfo, setDriverInfo] = useState(null);
+    const [driverLocation, setDriverLocation] = useState(null);
+    const [customerLocation, setCustomerLocation] = useState(null);
+    const [statusUpdates, setStatusUpdates] = useState([]);
+    const [estimatedArrival, setEstimatedArrival] = useState('');
+    const mapRef = useRef(null);
+    const [unsubscribeDriver, setUnsubscribeDriver] = useState(null);
+    const [unsubscribeDelivery, setUnsubscribeDelivery] = useState(null);
 
 useEffect(() => {
     initializeTracking();
@@ -44,54 +45,107 @@ useEffect(() => {
      }
  },[driverLocation, deliveryData]);
 
- const initializeTracking = async() => {
-     try{
-         // Get customer's current location
-         const location = await locationService.getCurrentLocation();
-         setCustomerLocation(location);
 
-         // Subscribe to driver location updates
-         if(deliveryData.driverId) {
-             const unsubDriver = firestoreService.subscribeToDriverLocation(
-                 deliveryData.driverId,
-                 (location, error) => {
-                     if(error) {
-                         console.error('Error tracking driver:',error);
-                         return;
-                     }
+ // Update the initializeTracking function in TrackingScreen.tsx
+ const initializeTracking = async () => {
+   try {
+     // First check and request location permissions
+     const permissionStatus = await requestLocationPermission();
 
-                 if(location){
-                     setDriverLocation(location);
-                     // Animate map to show both driver and destination
-                     animateToShowBothLocations(location);
-                 }
-                }
-            );
-             setUnsubscribeDriver(() => unsubDriver);
-         }
-
-         // Subscribe to delivery updates
-         const unsubDelivery = firestoreService.subscribeToDeliveryUpdates(
-             deliveryId,
-             (delivery, error)=> {
-             if(error) {
-                 console.error('Error tracking delivery:',error);
-                 return;
-             }
-             if(delivery){
-                 setDeliveryData(delivery);
-
-                 //Handle status changes
-                 handleDeliveryStatusChange(delivery.status);
-             }
-           }
-         );
-         setUnsubscribeDelivery(() => unsubDelivery);
-
-     } catch(error){
-         console.error('Error initializing tracking:',error);
-         Alert.alert('Error', 'Failed to initialize tracking');
+     if (!permissionStatus.granted) {
+       Alert.alert(
+         'Location Permission Required',
+         'Please enable location permissions in settings to track your delivery',
+         [
+           {
+             text: 'Cancel',
+             onPress: () => navigation.goBack(),
+             style: 'cancel',
+           },
+           {
+             text: 'Open Settings',
+             onPress: () => Linking.openSettings(),
+           },
+         ]
+       );
+       return;
      }
+
+     // Get customer's current location
+     const location = await locationService.getCurrentLocation();
+     setCustomerLocation(location);
+
+     // Rest of your existing initializeTracking code...
+     // Subscribe to driver location updates
+     if (deliveryData.driverId) {
+       const unsubDriver = firestoreService.subscribeToDriverLocation(
+         deliveryData.driverId,
+         (location, error) => {
+           if (error) {
+             console.error('Error tracking driver:', error);
+             return;
+           }
+
+           if (location) {
+             setDriverLocation(location);
+             // Animate map to show both driver and destination
+             animateToShowBothLocations(location);
+           }
+         }
+       );
+       setUnsubscribeDriver(() => unsubDriver);
+     }
+
+     // Subscribe to delivery updates
+     const unsubDelivery = firestoreService.subscribeToDeliveryUpdates(
+       deliveryId,
+       (delivery, error) => {
+         if (error) {
+           console.error('Error tracking delivery:', error);
+           return;
+         }
+         if (delivery) {
+           setDeliveryData(delivery);
+           // Handle status changes
+           handleDeliveryStatusChange(delivery.status);
+         }
+       }
+     );
+     setUnsubscribeDelivery(() => unsubDelivery);
+
+   } catch (error) {
+     console.error('Error initializing tracking:', error);
+     Alert.alert('Error', 'Failed to initialize tracking');
+   }
+ };
+
+ // Add this helper function to request permissions
+ const requestLocationPermission = async () => {
+   try {
+     let permission;
+
+     if (Platform.OS === 'ios') {
+       permission = PERMISSIONS.IOS.LOCATION_WHEN_IN_USE;
+     } else {
+       permission = PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION;
+     }
+
+     const result = await request(permission);
+
+     switch (result) {
+       case RESULTS.GRANTED:
+         return { granted: true };
+       case RESULTS.DENIED:
+         return { granted: false };
+       case RESULTS.BLOCKED:
+         return { granted: false, blocked: true };
+       default:
+         return { granted: false };
+     }
+   } catch (error) {
+     console.error('Error requesting location permission:', error);
+     return { granted: false };
+   }
  };
 
  const cleanup =()=> {
@@ -121,7 +175,7 @@ useEffect(() => {
     }
 
      const etaData = locationService.calculateETA(driverLocation, destination);
-     setEta(etaData);
+     setEstimatedArrival(`${etaData.formattedTime} (${etaData.distance.toFixed(1)}km)`);
  };
 
  const animateToShowBothLocations = (driverLoc) => {
@@ -264,9 +318,9 @@ useEffect(() => {
  <View style={styles.infoContainer}>
  <View style={styles.statusContainer}>
  <Text style={styles.statusText}>{getStatusMessage()}</Text>
- {eta&&(
+ {estimatedArrival &&(
      <Text style={styles.etaText}>
-        ETA:{eta.formattedTime}({eta.distance.toFixed(1)}km)
+        ETA: {estimatedArrival}
      </Text>
  )}
  </View>

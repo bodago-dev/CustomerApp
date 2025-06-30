@@ -315,7 +315,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   vehicleImageContainer: {
-    height: 120,
+    height: 215,
     backgroundColor: '#f0f0f0',
     position: 'relative',
   },
