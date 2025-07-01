@@ -1,406 +1,603 @@
- import React, { useState, useEffect, useRef } from 'react';
- import {
-   View,
-   Text,
-   StyleSheet,
-   Alert,
-   TouchableOpacity,
-   Linking,
-   Image,
-   ScrollView,
-   Dimensions,
-   ActivityIndicator,
- } from 'react-native';
- import { PERMISSIONS, request, RESULTS } from 'react-native-permissions';
- import Ionicons from 'react-native-vector-icons/Ionicons';
- import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
- import locationService from '../../services/LocationService';
- import firestoreService from '../../services/FirestoreService';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  Alert,
+  TouchableOpacity,
+  Linking,
+  Image,
+  ScrollView,
+  Dimensions,
+  ActivityIndicator,
+} from 'react-native';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import locationService from '../../services/LocationService';
+import firestoreService from '../../services/FirestoreService';
 
- const TrackingScreen = ({ route, navigation }) => {
-    const { deliveryId, packageDetails, pickupLocation, dropoffLocation, selectedVehicle, fareDetails } = route.params || {};
-    const [isLoading, setIsLoading] = useState(true);
-    const [deliveryStatus, setDeliveryStatus] = useState("searching");
-    const [deliveryData, setDeliveryData] = useState(route.params?.delivery || {});
-    const [driverInfo, setDriverInfo] = useState(null);
-    const [driverLocation, setDriverLocation] = useState(null);
-    const [customerLocation, setCustomerLocation] = useState(null);
-    const [statusUpdates, setStatusUpdates] = useState([]);
-    const [estimatedArrival, setEstimatedArrival] = useState('');
-    const mapRef = useRef(null);
-    const [unsubscribeDriver, setUnsubscribeDriver] = useState(null);
-    const [unsubscribeDelivery, setUnsubscribeDelivery] = useState(null);
+const { width } = Dimensions.get('window');
 
-useEffect(() => {
-    initializeTracking();
+const TrackingScreen = ({ route, navigation }) => {
+  const { deliveryId, packageDetails, pickupLocation, dropoffLocation, selectedVehicle, fareDetails, delivery } = route.params || {};
+  const [isLoading, setIsLoading] = useState(true);
+  const [deliveryStatus, setDeliveryStatus] = useState('searching');
+  const [deliveryData, setDeliveryData] = useState(delivery);
+  const [driverInfo, setDriverInfo] = useState(null);
+  const [driverLocation, setDriverLocation] = useState(null);
+  const [customerLocation,setCustomerLocation] = useState(null);
+  const [statusUpdates, setStatusUpdates] = useState([]);
+  const [estimatedArrival, setEstimatedArrival] = useState('');
+  const mapRef = useRef(null);
+  const [unsubscribeDriver, setUnsubscribeDriver] = useState(null);
+  const [unsubscribeDelivery, setUnsubscribeDelivery] = useState(null);
+  
+  // Status options: searching, accepted, arrived_pickup, picked_up, in_transit, arrived_dropoff, delivered
+  
+  // Initial region for map (centered between pickup and dropoff)
+  const [mapRegion, setMapRegion] = useState({
+    latitude: (pickupLocation?.coordinates?.latitude + dropoffLocation?.coordinates?.latitude) / 2,
+    longitude: (pickupLocation?.coordinates?.longitude + dropoffLocation?.coordinates?.longitude) / 2,
+    latitudeDelta: 0.05,
+    longitudeDelta: 0.05,
+  });
 
-     return() => {
-        cleanup();
-     };
- },[]);
+  // Simulate delivery flow
+  useEffect(() => {
+    // Simulate finding a driver
+    setTimeout(() => {
+      setIsLoading(false);
+      setDeliveryStatus('searching');
+      
+      // Add initial status update
+      setStatusUpdates([
+        {
+          id: '1',
+          status: 'Order Placed',
+          time: new Date().toLocaleTimeString(),
+          description: 'Your delivery request has been placed. Looking for a driver...',
+        },
+      ]);
+      
+      // Simulate driver accepting after 3 seconds
+      setTimeout(() => {
+        const driver = {
+          id: 'DRV123',
+          name: 'John Makonde',
+          phone: '+255712345678',
+          rating: 4.8,
+          vehicleType: selectedVehicle.id,
+          vehiclePlate: 'T 123 ABC',
+          photo: require('../../assets/driver-placeholder.jpg'),
+        };
+        
+        setDriverInfo(driver);
+        setDeliveryStatus('accepted');
+        setDriverLocation({
+          latitude: pickupLocation.coordinates.latitude - 0.01,
+          longitude: pickupLocation.coordinates.longitude - 0.01,
+        });
+        setEstimatedArrival('10 min');
+        
+        // Add status update
+        setStatusUpdates(prev => [
+          ...prev,
+          {
+            id: '2',
+            status: 'Driver Assigned',
+            time: new Date().toLocaleTimeString(),
+            description: `${driver.name} has accepted your delivery request.`,
+          },
+        ]);
+        
+        // Simulate driver arriving at pickup after 5 seconds
+        setTimeout(() => {
+          setDeliveryStatus('arrived_pickup');
+          setDriverLocation({
+            latitude: pickupLocation.coordinates.latitude,
+            longitude: pickupLocation.coordinates.longitude,
+          });
+          setEstimatedArrival('Arrived at pickup');
+          
+          // Add status update
+          setStatusUpdates(prev => [
+            ...prev,
+            {
+              id: '3',
+              status: 'Driver Arrived',
+              time: new Date().toLocaleTimeString(),
+              description: 'Driver has arrived at the pickup location.',
+            },
+          ]);
+          
+          // Simulate package picked up after 3 seconds
+          setTimeout(() => {
+            setDeliveryStatus('picked_up');
+            setEstimatedArrival('15 min to destination');
+            
+            // Add status update
+            setStatusUpdates(prev => [
+              ...prev,
+              {
+                id: '4',
+                status: 'Package Picked Up',
+                time: new Date().toLocaleTimeString(),
+                description: 'Your package has been picked up and is on its way.',
+              },
+            ]);
+            
+            // Simulate in transit after 2 seconds
+            setTimeout(() => {
+              setDeliveryStatus('in_transit');
+              setDriverLocation({
+                latitude: (pickupLocation.coordinates.latitude + dropoffLocation.coordinates.latitude) / 2,
+                longitude: (pickupLocation.coordinates.longitude + dropoffLocation.coordinates.longitude) / 2,
+              });
+              
+              // Add status update
+              setStatusUpdates(prev => [
+                ...prev,
+                {
+                  id: '5',
+                  status: 'In Transit',
+                  time: new Date().toLocaleTimeString(),
+                  description: 'Your package is on the way to the destination.',
+                },
+              ]);
+              
+              // Simulate arrived at dropoff after 5 seconds
+              setTimeout(() => {
+                setDeliveryStatus('arrived_dropoff');
+                setDriverLocation({
+                  latitude: dropoffLocation.coordinates.latitude,
+                  longitude: dropoffLocation.coordinates.longitude,
+                });
+                setEstimatedArrival('Arrived at destination');
+                
+                // Add status update
+                setStatusUpdates(prev => [
+                  ...prev,
+                  {
+                    id: '6',
+                    status: 'Arrived at Destination',
+                    time: new Date().toLocaleTimeString(),
+                    description: 'Driver has arrived at the delivery location.',
+                  },
+                ]);
+                
+                // Simulate delivered after 3 seconds
+                setTimeout(() => {
+                  setDeliveryStatus('delivered');
+                  setEstimatedArrival('Delivered');
+                  
+                  // Add status update
+                  setStatusUpdates(prev => [
+                    ...prev,
+                    {
+                      id: '7',
+                      status: 'Delivered',
+                      time: new Date().toLocaleTimeString(),
+                      description: 'Your package has been delivered successfully!',
+                    },
+                  ]);
+                }, 3000);
+              }, 5000);
+            }, 2000);
+          }, 3000);
+        }, 5000);
+      }, 3000);
+    }, 2000);
+  }, []);
 
-useEffect(() => {
-     if(driverLocation && deliveryData){
-        updateETA();
-     }
- },[driverLocation, deliveryData]);
-
-
- // Update the initializeTracking function in TrackingScreen.tsx
- const initializeTracking = async () => {
-   try {
-     // First check and request location permissions
-     const permissionStatus = await requestLocationPermission();
-
-     if (!permissionStatus.granted) {
-       Alert.alert(
-         'Location Permission Required',
-         'Please enable location permissions in settings to track your delivery',
-         [
-           {
-             text: 'Cancel',
-             onPress: () => navigation.goBack(),
-             style: 'cancel',
-           },
-           {
-             text: 'Open Settings',
-             onPress: () => Linking.openSettings(),
-           },
-         ]
-       );
-       return;
-     }
-
-     // Get customer's current location
-     const location = await locationService.getCurrentLocation();
-     setCustomerLocation(location);
-
-     // Rest of your existing initializeTracking code...
-     // Subscribe to driver location updates
-     if (deliveryData.driverId) {
-       const unsubDriver = firestoreService.subscribeToDriverLocation(
-         deliveryData.driverId,
-         (location, error) => {
-           if (error) {
-             console.error('Error tracking driver:', error);
-             return;
-           }
-
-           if (location) {
-             setDriverLocation(location);
-             // Animate map to show both driver and destination
-             animateToShowBothLocations(location);
-           }
-         }
-       );
-       setUnsubscribeDriver(() => unsubDriver);
-     }
-
-     // Subscribe to delivery updates
-     const unsubDelivery = firestoreService.subscribeToDeliveryUpdates(
-       deliveryId,
-       (delivery, error) => {
-         if (error) {
-           console.error('Error tracking delivery:', error);
-           return;
-         }
-         if (delivery) {
-           setDeliveryData(delivery);
-           // Handle status changes
-           handleDeliveryStatusChange(delivery.status);
-         }
-       }
-     );
-     setUnsubscribeDelivery(() => unsubDelivery);
-
-   } catch (error) {
-     console.error('Error initializing tracking:', error);
-     Alert.alert('Error', 'Failed to initialize tracking');
-   }
- };
-
- // Add this helper function to request permissions
- const requestLocationPermission = async () => {
-   try {
-     let permission;
-
-     if (Platform.OS === 'ios') {
-       permission = PERMISSIONS.IOS.LOCATION_WHEN_IN_USE;
-     } else {
-       permission = PERMISSIONS.ANDROID.ACCESS_FINE_LOCATION;
-     }
-
-     const result = await request(permission);
-
-     switch (result) {
-       case RESULTS.GRANTED:
-         return { granted: true };
-       case RESULTS.DENIED:
-         return { granted: false };
-       case RESULTS.BLOCKED:
-         return { granted: false, blocked: true };
-       default:
-         return { granted: false };
-     }
-   } catch (error) {
-     console.error('Error requesting location permission:', error);
-     return { granted: false };
-   }
- };
-
- const cleanup =()=> {
-     if(unsubscribeDriver){
-        unsubscribeDriver();
-     }
-     if(unsubscribeDelivery){
-        unsubscribeDelivery();
-     }
- };
-
- const updateETA =()=> {
-     if(!driverLocation || !deliveryData) return;
-
-     let destination;
-
-     switch (deliveryData.status) {
-         case 'accepted':
-         case 'driver_en_route': destination=deliveryData.pickupLocation;
-         break;
-         case 'arrived_pickup':
-         case 'package_picked_up':
-         case 'in_transit': destination=deliveryData.dropoffLocation;
-            break;
-         default:
-            return;
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'searching':
+        return '#ff9800';
+      case 'accepted':
+        return '#2196f3';
+      case 'arrived_pickup':
+        return '#2196f3';
+      case 'picked_up':
+        return '#2196f3';
+      case 'in_transit':
+        return '#2196f3';
+      case 'arrived_dropoff':
+        return '#2196f3';
+      case 'delivered':
+        return '#4caf50';
+      default:
+        return '#ff9800';
     }
+  };
 
-     const etaData = locationService.calculateETA(driverLocation, destination);
-     setEstimatedArrival(`${etaData.formattedTime} (${etaData.distance.toFixed(1)}km)`);
- };
+  const getStatusText = (status) => {
+    switch (status) {
+      case 'searching':
+        return 'Looking for a driver';
+      case 'accepted':
+        return 'Driver assigned';
+      case 'arrived_pickup':
+        return 'Driver arrived at pickup';
+      case 'picked_up':
+        return 'Package picked up';
+      case 'in_transit':
+        return 'Package in transit';
+      case 'arrived_dropoff':
+        return 'Arrived at destination';
+      case 'delivered':
+        return 'Package delivered';
+      default:
+        return 'Processing';
+    }
+  };
 
- const animateToShowBothLocations = (driverLoc) => {
-     if(!mapRef.current || !driverLoc) return;
+  const handleCallDriver = () => {
+    // In a real app, this would initiate a phone call
+    alert(`Calling driver at ${driverInfo.phone}`);
+  };
 
-     let coordinates = [driverLoc];
+  const handleMessageDriver = () => {
+    // In a real app, this would open a chat interface
+    alert('Messaging driver...');
+  };
 
-     if(deliveryData.status === 'accepted' || deliveryData.status === 'driver_en_route') {
-        coordinates.push(deliveryData.pickupLocation);
-     } else{
-        coordinates.push(deliveryData.dropoffLocation);
-     }
-     mapRef.current.fitToCoordinates(coordinates,{
-         edgePadding:{ top: 50, right: 50, bottom: 50,left: 50 },
-         animated: true
-     });
- };
+  const handleViewReceipt = () => {
+    // In a real app, this would show a receipt
+    alert('Viewing receipt...');
+  };
 
- const handleDeliveryStatusChange = (status) => {
-     switch (status) {
-     case 'driver_en_route': Alert.alert('Update', 'Your driver is on the way to pickup location');
-     break;
-     case 'arrived_pickup': Alert.alert('Update', 'Your driver has arrived at pickup location');
-     break;
-     case' package_picked_up': Alert.alert('Update', 'Your package has been picked up and is on its way');
-     break;
-     case' in_transit': Alert.alert('Update', 'Your package is in transit to the destination');
-     break;
-     case' arrived_dropoff': Alert.alert('Update', 'Your driver has arrived at the dropoff location');
-     break;
-     case' delivered':
-         Alert.alert('Delivery Complete', 'Your package has been delivered successfully');
-         navigation.navigate('DeliveryComplete', { deliveryId, delivery:deliveryData });
-     break;
-     }
- };
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#0066cc" />
+        <Text style={styles.loadingText}>Connecting to delivery network...</Text>
+      </View>
+    );
+  }
 
- const callDriver = () => {
-     if(deliveryData.driverPhone) {
-        Linking.openURL(`tel:${deliveryData.driverPhone}`);
-     }
- };
-
- const getStatusMessage = () => {
-     switch (deliveryData.status) {
-         case 'accepted':
-            return 'Driver assigned to your delivery';
-         case 'driver_en_route':
-            return 'Driver is heading to pickup location';
-         case 'arrived_pickup':
-            return 'Driver has arrived at pickup location';
-         case 'package_picked_up':
-            return 'Package picked up successfully';
-         case 'in_transit':
-            return 'Package is on its way to destination';
-         case 'arrived_dropoff':
-            return 'Driver has arrived at dropoff location';
-         default:
-            return 'Tracking your delivery';
-     }
- };
-
- const getMapRegion = () => {
-     if(driverLocation) {
-         return{
-             latitude: driverLocation.latitude,
-             longitude: driverLocation.longitude,
-             latitudeDelta: 0.01,
-             longitudeDelta: 0.01
-         };
-     } else if(customerLocation){
-         return {
-             latitude: customerLocation.latitude,
-             longitude: customerLocation.longitude,
-             latitudeDelta: 0.01,
-             longitudeDelta: 0.01
-         };
-     }
-
-     // Default to Dar es Salaam
-     return {
-         latitude: -6.7924,
-         longitude: 39.2083,
-         latitudeDelta: 0.1,
-         longitudeDelta: 0.1
-     };
- };
-
- return(
- <View style={styles.container}>
-     <MapView
-         ref={mapRef}
-         style={styles.map}
-         provider={PROVIDER_GOOGLE}
-         initialRegion={getMapRegion()}
-         showsUserLocation={true}
-         showsMyLocationButton={true}
-     >
-
- {/* Driver marker */}
- {driverLocation&&(
-     <Marker
-         coordinate={driverLocation}
-         title="Your Driver"
-         description={deliveryData.driverName||'Driver'}
-         image={require('../../assets/driver-placeholder.jpg')}
-     />
-    )}
-
- {/* Pickup location marker */}
- <Marker
-     coordinate={deliveryData.pickupLocation}
-     title="Pickup Location"
-     pinColor="green"
- />
-
- {/* Dropoff location marker */}
- <Marker
-     coordinate={deliveryData.dropoffLocation}
-     title="Dropoff Location"
-     pinColor="red"
- />
-
- {/* Route polyline */}
- {driverLocation&&(
-     <Polyline
-         coordinates={[
-             driverLocation,
-             deliveryData.status === 'accepted' || deliveryData.status === 'driver_en_route'
-             ?deliveryData.pickupLocation
-             :deliveryData.dropoffLocation
-         ]}
-             strokeColor="#007bff"
-             strokeWidth={3}
-             lineDashPattern={[5,5]}
-     />
- )}
- </MapView>
-
- <View style={styles.infoContainer}>
- <View style={styles.statusContainer}>
- <Text style={styles.statusText}>{getStatusMessage()}</Text>
- {estimatedArrival &&(
-     <Text style={styles.etaText}>
-        ETA: {estimatedArrival}
-     </Text>
- )}
- </View>
-
- <View style={styles.driverInfo}>
-     <Text style={styles.driverName}>
-        {deliveryData.driverName||'Driver'}
-     </Text>
-     <Text style={styles.vehicleInfo}>
-        {deliveryData.vehicleType}•{deliveryData.vehicleNumber}
-     </Text>
- </View>
-
-    <TouchableOpacity style={styles.callButton}onPress={callDriver}>
-        <Text style={styles.callButtonText}>Call Driver</Text>
-     </TouchableOpacity>
+  return (
+    <View style={styles.container}>
+      {/* Map View */}
+      <MapView
+        provider={PROVIDER_GOOGLE}
+        style={styles.map}
+        region={mapRegion}>
+        {/* Pickup Marker */}
+        <Marker
+          coordinate={pickupLocation.coordinates}
+          title="Pickup"
+          description={pickupLocation.name}>
+          <View style={[styles.markerContainer, { backgroundColor: '#e6f2ff' }]}>
+            <Ionicons name="locate" size={16} color="#0066cc" />
+          </View>
+        </Marker>
+        
+        {/* Dropoff Marker */}
+        <Marker
+          coordinate={dropoffLocation.coordinates}
+          title="Dropoff"
+          description={dropoffLocation.name}>
+          <View style={[styles.markerContainer, { backgroundColor: '#ffebee' }]}>
+            <Ionicons name="location" size={16} color="#ff6b6b" />
+          </View>
+        </Marker>
+        
+        {/* Driver Marker */}
+        {driverLocation && (
+          <Marker
+            coordinate={driverLocation}
+            title={driverInfo?.name || 'Driver'}
+            description={`${selectedVehicle.name} • ${driverInfo?.vehiclePlate || ''}`}>
+            <View style={[styles.markerContainer, { backgroundColor: '#0066cc' }]}>
+              <Ionicons 
+                name={
+                  selectedVehicle.id === 'boda' ? 'bicycle' : 
+                  selectedVehicle.id === 'tuktuk' ? 'car' : 'car-sport'
+                } 
+                size={16} 
+                color="#fff" 
+              />
+            </View>
+          </Marker>
+        )}
+        
+        {/* Route Line */}
+        {pickupLocation && dropoffLocation && (
+          <Polyline
+            coordinates={[
+              pickupLocation.coordinates,
+              dropoffLocation.coordinates,
+            ]}
+            strokeWidth={3}
+            strokeColor="#0066cc"
+            lineDashPattern={[1]}
+          />
+        )}
+      </MapView>
+      
+      {/* Status Panel */}
+      <View style={styles.statusPanel}>
+        {/* Delivery ID and Status */}
+        <View style={styles.deliveryHeader}>
+          <View>
+            <Text style={styles.deliveryId}>Order #{deliveryId}</Text>
+            <View style={styles.statusContainer}>
+              <View 
+                style={[
+                  styles.statusIndicator, 
+                  { backgroundColor: getStatusColor(deliveryStatus) }
+                ]} 
+              />
+              <Text style={styles.statusText}>{getStatusText(deliveryStatus)}</Text>
+            </View>
+          </View>
+          
+          {deliveryStatus === 'delivered' ? (
+            <TouchableOpacity 
+              style={styles.receiptButton}
+              onPress={handleViewReceipt}>
+              <Text style={styles.receiptButtonText}>View Receipt</Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={styles.eta}>{estimatedArrival}</Text>
+          )}
+        </View>
+        
+        {/* Driver Info */}
+        {driverInfo && deliveryStatus !== 'delivered' && (
+          <View style={styles.driverCard}>
+            <View style={styles.driverInfo}>
+              <Image source={driverInfo.photo} style={styles.driverPhoto} />
+              <View style={styles.driverDetails}>
+                <Text style={styles.driverName}>{driverInfo.name}</Text>
+                <View style={styles.driverRating}>
+                  <Ionicons name="star" size={14} color="#ffc107" />
+                  <Text style={styles.driverRatingText}>{driverInfo.rating}</Text>
+                </View>
+                <Text style={styles.vehicleInfo}>
+                  {selectedVehicle.name} • {driverInfo.vehiclePlate}
+                </Text>
+              </View>
+            </View>
+            
+            <View style={styles.driverActions}>
+              <TouchableOpacity 
+                style={[styles.driverActionButton, styles.callButton]}
+                onPress={handleCallDriver}>
+                <Ionicons name="call" size={20} color="#0066cc" />
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.driverActionButton, styles.messageButton]}
+                onPress={handleMessageDriver}>
+                <Ionicons name="chatbubble" size={20} color="#0066cc" />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+        
+        {/* Status Timeline */}
+        <View style={styles.timelineContainer}>
+          <Text style={styles.timelineTitle}>Delivery Updates</Text>
+          <ScrollView style={styles.timeline}>
+            {statusUpdates.map((update, index) => (
+              <View key={update.id} style={styles.timelineItem}>
+                <View style={styles.timelineDot} />
+                {index < statusUpdates.length - 1 && <View style={styles.timelineLine} />}
+                <View style={styles.timelineContent}>
+                  <View style={styles.timelineHeader}>
+                    <Text style={styles.timelineStatus}>{update.status}</Text>
+                    <Text style={styles.timelineTime}>{update.time}</Text>
+                  </View>
+                  <Text style={styles.timelineDescription}>{update.description}</Text>
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+        </View>
+      </View>
     </View>
- </View>
   );
- };
+};
 
- const styles = StyleSheet.create({
-     container:{
-        flex: 1,
-     },
-     map:{
-        flex: 1,
-     },
-     infoContainer:{
-         position: 'absolute',
-         bottom: 0,
-         left: 0,
-         right: 0,
-         backgroundColor: '#fff',
-         padding: 20,
-         borderTopLeftRadius: 20,
-         borderTopRightRadius: 20,
-         shadowColor: '#000',
-         shadowOffset: {width:0,height:-2},
-         shadowOpacity: 0.1,
-         shadowRadius: 4,
-         elevation: 5,
-     },
-     statusContainer:{
-        marginBottom: 15,
-     },
-     statusText:{
-         fontSize: 16,
-         fontWeight: '600',
-         color: '#333',
-         marginBottom: 5,
-     },
-     etaText:{
-         fontSize: 14,
-         color: '#666',
-     },
-     driverInfo:{
-        marginBottom: 15,
-     },
-     driverName:{
-         fontSize: 18,
-         fontWeight: 'bold',
-         color: '#333',
-     },
-     vehicleInfo:{
-        fontSize: 14,
-         color: '#666',
-         marginTop: 2,
-     },
-     callButton:{
-         backgroundColor: '#007bff',
-         padding: 15,
-         borderRadius: 8,
-         alignItems: 'center',
-     },
-     callButtonText:{
-         color: '#fff',
-         fontSize: 16,
-         fontWeight: '600',
-     },
- });
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f8f9fa',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  loadingText: {
+    marginTop: 15,
+    fontSize: 16,
+    color: '#666',
+  },
+  map: {
+    height: '50%',
+  },
+  markerContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  statusPanel: {
+    flex: 1,
+    backgroundColor: '#fff',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    marginTop: -20,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  deliveryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+  deliveryId: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  statusContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 5,
+  },
+  statusIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 6,
+  },
+  statusText: {
+    fontSize: 14,
+    color: '#666',
+  },
+  eta: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#0066cc',
+  },
+  receiptButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#e6f2ff',
+    borderRadius: 6,
+  },
+  receiptButtonText: {
+    fontSize: 12,
+    color: '#0066cc',
+    fontWeight: '500',
+  },
+  driverCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#f9f9f9',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 15,
+  },
+  driverInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  driverPhoto: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    marginRight: 12,
+  },
+  driverDetails: {
+    flex: 1,
+  },
+  driverName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#333',
+  },
+  driverRating: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  driverRatingText: {
+    fontSize: 12,
+    color: '#666',
+    marginLeft: 3,
+  },
+  vehicleInfo: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  driverActions: {
+    flexDirection: 'row',
+  },
+  driverActionButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  callButton: {
+    backgroundColor: '#e6f2ff',
+  },
+  messageButton: {
+    backgroundColor: '#e6f2ff',
+  },
+  timelineContainer: {
+    flex: 1,
+  },
+  timelineTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  timeline: {
+    flex: 1,
+  },
+  timelineItem: {
+    flexDirection: 'row',
+    marginBottom: 15,
+  },
+  timelineDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#0066cc',
+    marginTop: 5,
+    marginRight: 10,
+    zIndex: 1,
+  },
+  timelineLine: {
+    position: 'absolute',
+    left: 5.5,
+    top: 17,
+    bottom: -15,
+    width: 1,
+    backgroundColor: '#ddd',
+  },
+  timelineContent: {
+    flex: 1,
+  },
+  timelineHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  timelineStatus: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+  },
+  timelineTime: {
+    fontSize: 12,
+    color: '#999',
+  },
+  timelineDescription: {
+    fontSize: 13,
+    color: '#666',
+  },
+});
 
- export default TrackingScreen;
+export default TrackingScreen;
