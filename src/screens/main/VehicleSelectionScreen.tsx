@@ -19,7 +19,7 @@ const VehicleSelectionScreen = ({ route, navigation }) => {
     {
       id: 'boda',
       name: 'Boda Boda',
-      icon: 'bicycle-outline',
+      icon: 'motorcycle',
       image: require('../../assets/boda.png'),
       description: 'Motorcycle delivery',
       estimatedTime: '15-25 min',
@@ -30,7 +30,7 @@ const VehicleSelectionScreen = ({ route, navigation }) => {
     {
       id: 'bajaji',
       name: 'Bajaji',
-      icon: 'car-outline',
+      icon: 'bike-scooter',
       image: require('../../assets/bajaji.png'),
       description: 'Bajaji delivery',
       estimatedTime: '20-30 min',
@@ -41,7 +41,7 @@ const VehicleSelectionScreen = ({ route, navigation }) => {
     {
       id: 'guta',
       name: 'Guta',
-      icon: 'car-sport-outline',
+      icon: 'dump-truck',
       image: require('../../assets/guta.png'),
       description: 'Guta delivery',
       estimatedTime: '25-40 min',
@@ -61,7 +61,7 @@ const VehicleSelectionScreen = ({ route, navigation }) => {
       // Only vans can handle large or heavy packages
       return vehicleOptions.map(vehicle => ({
         ...vehicle,
-        available: vehicle.id === 'van',
+        available: vehicle.id === 'guta',
       }));
     } else if (size === 'medium' || weight === 'medium') {
       // Bajajis and gutas can handle medium packages

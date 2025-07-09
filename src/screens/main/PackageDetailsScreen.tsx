@@ -88,7 +88,6 @@ const PackageDetailsScreen = ({ navigation }) => {
             </Picker>
           </View>
         </View>
-
         {/* Rest of the code remains the same */}
         {/* Package Size Selection */}
         <View style={styles.inputGroup}>
