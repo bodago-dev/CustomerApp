@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,24 +6,27 @@ import {
   TouchableOpacity,
   Dimensions,
   ActivityIndicator,
+  Platform,
+  KeyboardAvoidingView,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import Config from 'react-native-config';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 const LocationSelectionScreen = ({ route, navigation }) => {
+  const pickupRef = useRef<GooglePlacesAutocomplete>(null);
+  const dropoffRef = useRef<GooglePlacesAutocomplete>(null);
 
-  console.log('API Key:', Config.GOOGLE_PLACES_API_KEY);
   const { packageDetails } = route.params || {};
-
   const [pickupLocation, setPickupLocation] = useState(null);
   const [dropoffLocation, setDropoffLocation] = useState(null);
   const [activeField, setActiveField] = useState('pickup');
   const [isLoading, setIsLoading] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [apiReady, setApiReady] = useState(false);
 
   // Initial region for Tanzania (centered on Dar es Salaam)
   const [mapRegion, setMapRegion] = useState({
@@ -32,6 +35,11 @@ const LocationSelectionScreen = ({ route, navigation }) => {
     latitudeDelta: 0.0922,
     longitudeDelta: 0.0421,
   });
+
+  useEffect(() => {
+    console.log('API Key from Config:', Config.GOOGLE_PLACES_API_KEY);
+    setApiReady(!!Config.GOOGLE_PLACES_API_KEY);
+  }, []);
 
   const handleLocationSelect = (data, details, field) => {
     if (!details?.geometry?.location) return;
@@ -44,7 +52,7 @@ const LocationSelectionScreen = ({ route, navigation }) => {
         latitude: details.geometry.location.lat,
         longitude: details.geometry.location.lng,
       },
-      details: details, // Full details from Google
+      details: details,
     };
 
     if (field === 'pickup') {
@@ -53,7 +61,6 @@ const LocationSelectionScreen = ({ route, navigation }) => {
       setDropoffLocation(location);
     }
 
-    // Update map region to show the selected location
     setMapRegion({
       latitude: details.geometry.location.lat,
       longitude: details.geometry.location.lng,
@@ -62,22 +69,63 @@ const LocationSelectionScreen = ({ route, navigation }) => {
     });
   };
 
-  const handleMapPress = (event) => {
+  const handleMapPress = async (event) => {
     const { coordinate } = event.nativeEvent;
 
-    // Create a new location object
-    const newLocation = {
-      id: `custom-${Date.now()}`,
-      name: activeField === 'pickup' ? 'Pickup Location' : 'Dropoff Location',
-      address: `Lat: ${coordinate.latitude.toFixed(4)}, Lng: ${coordinate.longitude.toFixed(4)}`,
-      coordinates: coordinate,
-    };
+    try {
+      setIsLoading(true);
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${coordinate.latitude},${coordinate.longitude}&key=${Config.GOOGLE_PLACES_API_KEY}`
+      );
+      const data = await response.json();
 
-    if (activeField === 'pickup') {
-      setPickupLocation(newLocation);
-    } else {
-      setDropoffLocation(newLocation);
+      if (data.results?.length > 0) {
+        const firstResult = data.results[0];
+        const newLocation = {
+          id: `custom-${Date.now()}`,
+          name: firstResult.address_components[0]?.long_name || 'Selected Location',
+          address: firstResult.formatted_address,
+          coordinates: coordinate,
+          details: firstResult,
+        };
+
+        if (activeField === 'pickup') {
+          setPickupLocation(newLocation);
+          pickupRef.current?.setAddressText(newLocation.address);
+        } else {
+          setDropoffLocation(newLocation);
+          dropoffRef.current?.setAddressText(newLocation.address);
+        }
+      } else {
+        const newLocation = {
+          id: `custom-${Date.now()}`,
+          name: activeField === 'pickup' ? 'Pickup Location' : 'Dropoff Location',
+          address: `Lat: ${coordinate.latitude.toFixed(4)}, Lng: ${coordinate.longitude.toFixed(4)}`,
+          coordinates: coordinate,
+        };
+
+        if (activeField === 'pickup') {
+          setPickupLocation(newLocation);
+          pickupRef.current?.setAddressText(newLocation.address);
+        } else {
+          setDropoffLocation(newLocation);
+          dropoffRef.current?.setAddressText(newLocation.address);
+        }
+      }
+    } catch (error) {
+      console.error('Reverse geocoding error:', error);
+      alert('Failed to get address for this location');
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const handleApiError = (error) => {
+    console.log('Full API Error:', JSON.stringify(error, null, 2));
+    if (error?.message?.includes('argument 7')) {
+      console.warn('Google Places API version mismatch detected');
+    }
+    alert('Location search failed. Please try again.');
   };
 
   const handleContinue = () => {
@@ -85,12 +133,10 @@ const LocationSelectionScreen = ({ route, navigation }) => {
       alert('Please select a pickup location');
       return;
     }
-
     if (!dropoffLocation) {
       alert('Please select a dropoff location');
       return;
     }
-
     navigation.navigate('VehicleSelection', {
       packageDetails,
       pickupLocation,
@@ -99,13 +145,17 @@ const LocationSelectionScreen = ({ route, navigation }) => {
   };
 
   return (
-    <View style={styles.container}>
-      {/* Map View */}
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
       <MapView
         provider={PROVIDER_GOOGLE}
         style={styles.map}
         region={mapRegion}
-        onPress={handleMapPress}>
+        onPress={handleMapPress}
+        onMapReady={() => setMapLoaded(true)}
+      >
         {pickupLocation && (
           <Marker
             coordinate={pickupLocation.coordinates}
@@ -124,136 +174,174 @@ const LocationSelectionScreen = ({ route, navigation }) => {
         )}
       </MapView>
 
-      {/* Location Input Panel */}
       <View style={styles.inputPanel}>
-        {/* Pickup Location */}
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Pickup Location</Text>
-          {Config.GOOGLE_PLACES_API_KEY ? (
-            <GooglePlacesAutocomplete
-              placeholder="Enter pickup location"
-              onPress={(data, details = null) => {
-                handleLocationSelect(data, details, 'pickup');
-                setActiveField('pickup');
-              }}
-              query={{
-                key: Config.GOOGLE_PLACES_API_KEY,
-                language: 'en',
-                components: 'country:tz',
-              }}
-              predefinedPlaces={[]}
-              fetchDetails={true}
-              onFail={(error) => console.error('Google Places Error:', error)}
-              onNotFound={() => console.warn('No results found')}
-              styles={{
-                textInput: styles.googleInput,
-                listView: styles.googleList,
-                row: styles.googleRow,
-                description: styles.googleDescription,
-                poweredContainer: styles.googlePoweredContainer,
-              }}
-              textInputProps={{
-                onFocus: () => setActiveField('pickup'),
-                placeholderTextColor: '#999',
-              }}
-              enablePoweredByContainer={false}
-              debounce={300}
-              renderLeftButton={() => (
-                <View style={styles.inputIcon}>
-                  <Ionicons name="locate" size={20} color="#0066cc" />
-                </View>
-              )}
-              renderRightButton={() =>
-                pickupLocation && (
-                  <TouchableOpacity
-                    style={styles.clearButton}
-                    onPress={() => {
-                      setPickupLocation(null);
-                    }}>
-                    <Ionicons name="close-circle" size={18} color="#999" />
-                  </TouchableOpacity>
-                )
-              }
-              suppressDefaultStyles={true}
-              listEmptyComponent={() => (
-                <View style={{ padding: 10 }}>
-                  <Text>No results found</Text>
-                </View>
-              )}
-            />
-          ) : (
-            <Text style={{ color: 'red' }}>Google Places API key not configured</Text>
-          )}
-        </View>
-
-        {/* Dropoff Location */}
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Dropoff Location</Text>
-          <GooglePlacesAutocomplete
-            placeholder="Enter dropoff location"
-            onPress={(data, details = null) => {
-              handleLocationSelect(data, details, 'dropoff');
-              setActiveField('dropoff');
-            }}
-            query={{
-              key: Config.GOOGLE_PLACES_API_KEY,
-              language: 'en',
-              components: 'country:tz', // Tanzania only
-            }}
-            predefinedPlaces={[]}
-            fetchDetails={true}
-            styles={{
-              textInput: styles.googleInput,
-              listView: styles.googleList,
-              row: styles.googleRow,
-              description: styles.googleDescription,
-              poweredContainer: styles.googlePoweredContainer,
-            }}
-            textInputProps={{
-              onFocus: () => setActiveField('dropoff'),
-              placeholderTextColor: '#999',
-            }}
-            enablePoweredByContainer={false}
-            debounce={300}
-            renderLeftButton={() => (
-              <View style={styles.inputIcon}>
-                <Ionicons name="location" size={20} color="#ff6b6b" />
-              </View>
+        <View>
+          {/* Pickup Location */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Pickup Location</Text>
+            {apiReady ? (
+              <GooglePlacesAutocomplete
+                ref={pickupRef}
+                placeholder="Enter pickup location"
+                returnKeyType={'search'}
+                listViewDisplayed="auto"
+                predefinedPlaces={[]}
+                fetchDetails={true}
+                onPress={(data, details = null) => {
+                  handleLocationSelect(data, details, 'pickup');
+                  setActiveField('pickup');
+                }}
+                query={{
+                  key: Config.GOOGLE_PLACES_API_KEY,
+                  language: 'en',
+                  components: 'country:tz',
+                  types: 'geocode',
+                  location: `${mapRegion.latitude},${mapRegion.longitude}`,
+                  radius: 20000,
+                  strictbounds: true,
+                }}
+                textInputProps={{
+                  onFocus: () => setActiveField('pickup'),
+                  placeholderTextColor: '#187814',
+                }}
+                styles={{
+                  textInputContainer: styles.googleTextInputContainer,
+                  textInput: styles.googleInput,
+                  listView: styles.listView,
+                  row: styles.googleRow,
+                  description: styles.googleDescription,
+                  separator: styles.separator,
+                }}
+                enablePoweredByContainer={false}
+                debounce={300}
+                renderLeftButton={() => (
+                  <View style={styles.inputIcon}>
+                    <Ionicons name="locate" size={20} color="#0066cc" />
+                  </View>
+                )}
+                renderRightButton={() => (
+                  <View style={{ flexDirection: 'row' }}>
+                    {isLoading && (
+                      <ActivityIndicator
+                        size="small"
+                        color="#0066cc"
+                        style={styles.loadingIndicator}
+                      />
+                    )}
+                    {pickupLocation && (
+                      <TouchableOpacity
+                        style={styles.clearButton}
+                        onPress={() => setPickupLocation(null)}
+                      >
+                        <Ionicons name="close-circle" size={18} color="#999" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+                onFail={handleApiError}
+                onNotFound={() => alert('No results found for your search')}
+                suppressDefaultStyles={false}
+                currentLocation={false}
+              />
+            ) : (
+              <Text style={{ color: 'red' }}>Google Places API not configured</Text>
             )}
-            renderRightButton={() =>
-              dropoffLocation && (
-                <TouchableOpacity
-                  style={styles.clearButton}
-                  onPress={() => {
-                    setDropoffLocation(null);
-                  }}>
-                  <Ionicons name="close-circle" size={18} color="#999" />
-                </TouchableOpacity>
-              )
-            }
-          />
-        </View>
+          </View>
 
-        {/* Continue Button */}
-        <TouchableOpacity
-          style={[
-            styles.continueButton,
-            (!pickupLocation || !dropoffLocation) && styles.disabledButton,
-          ]}
-          onPress={handleContinue}
-          disabled={!pickupLocation || !dropoffLocation}>
-          <Text style={styles.continueButtonText}>Continue</Text>
-          <Ionicons name="arrow-forward" size={20} color="#fff" />
-        </TouchableOpacity>
+          {/* Dropoff Location */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Dropoff Location</Text>
+            {apiReady ? (
+              <GooglePlacesAutocomplete
+                ref={dropoffRef}
+                placeholder="Enter dropoff location"
+                returnKeyType={'search'}
+                listViewDisplayed="auto"
+                predefinedPlaces={[]}
+                fetchDetails={true}
+                onPress={(data, details = null) => {
+                  handleLocationSelect(data, details, 'dropoff');
+                  setActiveField('dropoff');
+                }}
+                query={{
+                  key: Config.GOOGLE_PLACES_API_KEY,
+                  language: 'en',
+                  components: 'country:tz',
+                  types: 'geocode',
+                  location: `${mapRegion.latitude},${mapRegion.longitude}`,
+                  radius: 20000,
+                  strictbounds: true,
+                }}
+                textInputProps={{
+                  onFocus: () => setActiveField('dropoff'),
+                  placeholderTextColor: '#a10603',
+                }}
+                styles={{
+                  textInputContainer: styles.googleTextInputContainer,
+                  textInput: styles.googleInput,
+                  listView: styles.listView,
+                  row: styles.googleRow,
+                  description: styles.googleDescription,
+                  separator: styles.separator,
+                }}
+                enablePoweredByContainer={false}
+                debounce={300}
+                renderLeftButton={() => (
+                  <View style={styles.inputIcon}>
+                    <Ionicons name="location" size={20} color="#ff6b6b" />
+                  </View>
+                )}
+                renderRightButton={() => (
+                  <View style={{ flexDirection: 'row' }}>
+                    {isLoading && (
+                      <ActivityIndicator
+                        size="small"
+                        color="#ff6b6b"
+                        style={styles.loadingIndicator}
+                      />
+                    )}
+                    {dropoffLocation && (
+                      <TouchableOpacity
+                        style={styles.clearButton}
+                        onPress={() => setDropoffLocation(null)}
+                      >
+                        <Ionicons name="close-circle" size={18} color="#999" />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
+                onFail={handleApiError}
+                onNotFound={() => alert('No results found for your search')}
+                suppressDefaultStyles={false}
+                currentLocation={false}
+              />
+            ) : (
+              <Text style={{ color: 'red' }}>Google Places API not configured</Text>
+            )}
+          </View>
+
+          {/* Continue Button */}
+          <TouchableOpacity
+            style={[
+              styles.continueButton,
+              (!pickupLocation || !dropoffLocation) && styles.disabledButton,
+            ]}
+            onPress={handleContinue}
+            disabled={!pickupLocation || !dropoffLocation}
+          >
+            <Text style={styles.continueButtonText}>Continue</Text>
+            <Ionicons name="arrow-forward" size={20} color="#fff" />
+          </TouchableOpacity>
+        </View>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: '#f8f9fa',
   },
   map: {
     flex: 1,
@@ -267,6 +355,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     padding: 20,
+    paddingBottom: Platform.OS === 'ios' ? 30 : 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
@@ -278,72 +367,100 @@ const styles = StyleSheet.create({
   },
   inputLabel: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
     color: '#333',
     marginBottom: 8,
+  },
+  googleTextInputContainer: {
+    borderWidth: 0,
+    paddingHorizontal: 0,
   },
   googleInput: {
     height: 50,
     fontSize: 16,
     color: '#333',
-    paddingHorizontal: 15,
+    paddingHorizontal: 45,
     borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
+    borderColor: '#e0e0e0',
+    borderRadius: 10,
+    backgroundColor: '#f5f5f5',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  googleList: {
+  listView: {
     position: 'absolute',
     top: '100%',
     left: 0,
     right: 0,
     backgroundColor: '#fff',
-    borderRadius: 8,
+    borderRadius: 10,
     maxHeight: 200,
     marginTop: 5,
     borderWidth: 1,
-    borderColor: '#eee',
-    zIndex: 999,
+    borderColor: '#e0e0e0',
+    zIndex: 1000,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 10,
   },
   googleRow: {
     padding: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: '#f0f0f0',
   },
   googleDescription: {
     fontSize: 14,
-    color: '#666',
-  },
-  googlePoweredContainer: {
-    display: 'none',
+    color: '#444',
   },
   inputIcon: {
     position: 'absolute',
-    left: 10,
+    left: 15,
     top: 15,
     zIndex: 1,
   },
   clearButton: {
     position: 'absolute',
-    right: 10,
+    right: 15,
     top: 15,
     zIndex: 1,
+    padding: 5,
   },
   continueButton: {
     backgroundColor: '#0066cc',
-    borderRadius: 8,
+    borderRadius: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
+    paddingVertical: 16,
+    marginTop: 10,
+    shadowColor: '#0066cc',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 5,
   },
   disabledButton: {
-    backgroundColor: '#99ccff',
+    backgroundColor: '#a0c8f0',
+    shadowOpacity: 0.1,
+    elevation: 2,
   },
   continueButtonText: {
     color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-    marginRight: 8,
+    fontSize: 18,
+    fontWeight: '700',
+    marginRight: 10,
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#e0e0e0',
+  },
+  loadingIndicator: {
+    marginRight: 10,
   },
 });
 

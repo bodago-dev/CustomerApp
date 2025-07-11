@@ -108,7 +108,7 @@ const VehicleSelectionScreen = ({ route, navigation }) => {
                 <Ionicons name="locate" size={16} color="#0066cc" />
               </View>
               <Text style={styles.locationText} numberOfLines={1}>
-                {pickupLocation?.name || 'Pickup location'}
+                {pickupLocation?.address || 'Pickup location'}
               </Text>
             </View>
             <View style={styles.routeDivider}>
@@ -119,7 +119,7 @@ const VehicleSelectionScreen = ({ route, navigation }) => {
                 <Ionicons name="location" size={16} color="#ff6b6b" />
               </View>
               <Text style={styles.locationText} numberOfLines={1}>
-                {dropoffLocation?.name || 'Dropoff location'}
+                {dropoffLocation?.address || 'Dropoff location'}
               </Text>
             </View>
           </View>
