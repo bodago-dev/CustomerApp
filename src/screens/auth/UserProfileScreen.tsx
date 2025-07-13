@@ -22,22 +22,6 @@ const UserProfileScreen = ({ route, navigation }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
 
-  // Check authentication state when component mounts
-//     useEffect(() => {
-//       const auth = getAuth();
-//       const subscriber = onAuthStateChanged(auth, (user) => {
-//         setCurrentUser(user);
-//         if (!user) {
-//           Alert.alert(
-//             'Authentication Required',
-//             'Please complete phone verification first'
-//           );
-//           navigation.goBack();
-//         }
-//       });
-//       return subscriber; // Unsubscribe on unmount
-//     }, []);
-
     // Update the handleSaveProfile function in UserProfileScreen.tsx
     const handleSaveProfile = async () => {
       if (!firstName.trim() || !lastName.trim()) {
@@ -46,12 +30,6 @@ const UserProfileScreen = ({ route, navigation }) => {
       }
 
       setIsLoading(true);
-
-      // const auth = getAuth(); // Not strictly needed here if authService handles current user
-      // const user = auth.currentUser;
-
-      // if (!user) { // This check should ideally be handled by authService or by ensuring user is always present when reaching this screen
-      //   throw new Error('Authentication expired. Please verify your phone again.');
 
       try { // This is the START of the try block
         const userData = {

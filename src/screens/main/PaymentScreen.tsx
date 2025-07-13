@@ -23,9 +23,25 @@ const PaymentScreen = ({ route, navigation }) => {
     { id: 'mpesa', name: 'M-Pesa', icon: require('../../assets/mpesa.jpg') },
     { id: 'mixx', name: 'Mixx by Yas', icon: require('../../assets/mixx.png') },
     { id: 'airtelmoney', name: 'Airtel Money', icon: require('../../assets/airtel-money.png') },
+    { id: 'cash', name: 'Cash on Delivery', icon: 'cash' },
   ];
 
   const handlePayment = () => {
+  // Cash on Delivery payment option
+    if (paymentMethod === 'cash') {
+        // For cash payment, navigate directly to tracking
+        navigation.navigate('Tracking', {
+          deliveryId: 'DEL' + Math.floor(Math.random() * 10000),
+          packageDetails,
+          pickupLocation,
+          dropoffLocation,
+          selectedVehicle,
+          fareDetails,
+          paymentMethod: 'cash', // Add payment method to params
+        });
+        return;
+    }
+
     // Basic validation
     if (!phoneNumber || phoneNumber.length < 9) {
       Alert.alert('Invalid Phone Number', 'Please enter a valid phone number');
@@ -55,6 +71,7 @@ const PaymentScreen = ({ route, navigation }) => {
                 dropoffLocation,
                 selectedVehicle,
                 fareDetails,
+                paymentMethod,
               });
             },
           },
@@ -73,56 +90,67 @@ const PaymentScreen = ({ route, navigation }) => {
         <Text style={styles.title}>Payment</Text>
         <Text style={styles.subtitle}>Choose your payment method</Text>
         
-        {/* Payment Methods */}
+        {/* Payment Methods Grid */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Payment Method</Text>
-          <View style={styles.paymentMethodsContainer}>
+          <View style={styles.paymentMethodsGrid}>
             {paymentMethods.map((method) => (
               <TouchableOpacity
                 key={method.id}
                 style={[
                   styles.paymentMethodCard,
                   paymentMethod === method.id && styles.selectedPaymentMethod,
+                  method.id === 'cash' && styles.cashPaymentMethod,
                 ]}
-                onPress={() => setPaymentMethod(method.id)}>
-                <Image source={method.icon} style={styles.paymentMethodIcon} />
+                onPress={() => setPaymentMethod(method.id)}
+              >
+                {method.id === 'cash' ? (
+                  <Ionicons name="cash-outline" size={32} color="#4CAF50" />
+                ) : (
+                  <Image source={method.icon} style={styles.paymentMethodIcon} />
+                )}
                 <Text
                   style={[
                     styles.paymentMethodName,
                     paymentMethod === method.id && styles.selectedPaymentMethodText,
-                  ]}>
+                  ]}
+                >
                   {method.name}
                 </Text>
                 {paymentMethod === method.id && (
-                  <Ionicons name="checkmark-circle" size={20} color="#0066cc" />
+                  <View style={styles.selectedIndicator}>
+                    <Ionicons name="checkmark-circle" size={20} color="#0066cc" />
+                  </View>
                 )}
               </TouchableOpacity>
             ))}
           </View>
         </View>
         
-        {/* Phone Number Input */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Mobile Money Number</Text>
-          <Text style={styles.helperText}>
-            Enter the phone number registered with {
-              paymentMethod === 'mpesa' ? 'M-Pesa' : 
-              paymentMethod === 'mixx' ? 'Mixx by Yas' : 'Airtel Money'
-            }
-          </Text>
-          
-          <View style={styles.phoneInputContainer}>
-            <Text style={styles.countryCode}>+255</Text>
-            <TextInput
-              style={styles.phoneInput}
-              placeholder="712 345 678"
-              keyboardType="phone-pad"
-              value={phoneNumber}
-              onChangeText={setPhoneNumber}
-              maxLength={10}
-            />
+        {/* Phone Number Input - Only show for mobile payments */}
+        {paymentMethod !== 'cash' && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Mobile Money Number</Text>
+            <Text style={styles.helperText}>
+              Enter the phone number registered with {
+                paymentMethod === 'mpesa' ? 'M-Pesa' :
+                paymentMethod === 'mixx' ? 'Mixx by Yas' : 'Airtel Money'
+              }
+            </Text>
+
+            <View style={styles.phoneInputContainer}>
+              <Text style={styles.countryCode}>+255</Text>
+              <TextInput
+                style={styles.phoneInput}
+                placeholder="712 345 678"
+                keyboardType="phone-pad"
+                value={phoneNumber}
+                onChangeText={setPhoneNumber}
+                maxLength={10}
+              />
+            </View>
           </View>
-        </View>
+        )}
         
         {/* Order Summary */}
         <View style={styles.card}>
@@ -174,12 +202,14 @@ const PaymentScreen = ({ route, navigation }) => {
         <TouchableOpacity
           style={[styles.payButton, isProcessing && styles.disabledButton]}
           onPress={handlePayment}
-          disabled={isProcessing || !phoneNumber}>
+          disabled={isProcessing || (paymentMethod !== 'cash' && !phoneNumber)}
+          >
           {isProcessing ? (
             <ActivityIndicator color="#fff" size="small" />
           ) : (
             <>
-              <Text style={styles.payButtonText}>Pay {formatPrice(fareDetails.total)}</Text>
+              <Text style={styles.payButtonText}>{paymentMethod === 'cash' ? 'Confirm Cash Payment' : `Pay ${formatPrice(fareDetails.total)}`}
+              </Text>
               <Ionicons name="arrow-forward" size={20} color="#fff" />
             </>
           )}
@@ -353,6 +383,66 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     marginRight: 8,
+  },
+  cashPaymentMethod: {
+    borderColor: '#4CAF50',
+  },
+  cashBadge: {
+    position: 'absolute',
+    top: 5,
+    left: 5,
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  cashBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  paymentMethodsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  paymentMethodCard: {
+    width: '48%', // Slightly less than half to account for spacing
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 15,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    marginBottom: 15,
+    position: 'relative',
+  },
+  selectedPaymentMethod: {
+    borderColor: '#0066cc',
+    backgroundColor: '#f0f7ff',
+  },
+  paymentMethodIcon: {
+    width: 40,
+    height: 40,
+    resizeMode: 'contain',
+    marginBottom: 5,
+  },
+  paymentMethodName: {
+    fontSize: 14,
+    color: '#333',
+    textAlign: 'center',
+  },
+  selectedPaymentMethodText: {
+    color: '#0066cc',
+    fontWeight: '500',
+  },
+  cashPaymentMethod: {
+    borderColor: '#4CAF50',
+  },
+  selectedIndicator: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
   },
 });
 

@@ -27,7 +27,7 @@ const TrackingScreen = ({ route, navigation }) => {
       return null;
     }
 
-  const { deliveryId, pickupLocation, dropoffLocation, selectedVehicle, fareDetails} = route.params || {};
+  const { deliveryId, pickupLocation, dropoffLocation, selectedVehicle, fareDetails, paymentMethod} = route.params || {};
   const [isLoading, setIsLoading] = useState(true);
   const [deliveryStatus, setDeliveryStatus] = useState('searching');
   const [deliveryData, setDeliveryData] = useState(route.params || {});

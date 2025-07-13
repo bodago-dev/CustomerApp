@@ -18,6 +18,7 @@ const { width, height } = Dimensions.get('window');
 
 const LocationSelectionScreen = ({ route, navigation }) => {
   const pickupRef = useRef<GooglePlacesAutocomplete>(null);
+  
   const dropoffRef = useRef<GooglePlacesAutocomplete>(null);
 
   const { packageDetails } = route.params || {};
