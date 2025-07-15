@@ -7,98 +7,63 @@ import {
   TouchableOpacity,
   Image,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import firestoreService from '../../services/FirestoreService';
+import authService from '../../services/AuthService';
 
 const DeliveryHistoryScreen = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [deliveries, setDeliveries] = useState([]);
   const [activeTab, setActiveTab] = useState('all'); // 'all', 'active', 'completed'
-  
-  // Fetch delivery history
+  const [userId, setUserId] = useState(null);
+
   useEffect(() => {
-    // Simulate API call to fetch delivery history
-    setTimeout(() => {
-      const mockDeliveries = [
-        {
-          id: 'DEL1001',
-          status: 'delivered',
-          date: '2025-06-05',
-          time: '14:30',
-          pickupAddress: 'Home, 123 Uhuru Street',
-          dropoffAddress: 'Mlimani City Mall',
-          packageSize: 'small',
-          vehicleType: 'boda',
-          amount: 4500,
-          driverName: 'John M.',
-          rating: 5,
-        },
-        {
-          id: 'DEL1002',
-          status: 'in_transit',
-          date: '2025-06-07',
-          time: '10:15',
-          pickupAddress: 'Office, 456 Samora Avenue',
-          dropoffAddress: 'Julius Nyerere International Airport',
-          packageSize: 'medium',
-          vehicleType: 'tuktuk',
-          amount: 6500,
-          driverName: 'Sarah N.',
-          rating: null,
-        },
-        {
-          id: 'DEL1003',
-          status: 'delivered',
-          date: '2025-06-02',
-          time: '09:45',
-          pickupAddress: 'Home, 123 Uhuru Street',
-          dropoffAddress: 'Kariakoo Market',
-          packageSize: 'small',
-          vehicleType: 'boda',
-          amount: 3500,
-          driverName: 'David L.',
-          rating: 4,
-        },
-        {
-          id: 'DEL1004',
-          status: 'cancelled',
-          date: '2025-05-30',
-          time: '16:20',
-          pickupAddress: 'Office, 456 Samora Avenue',
-          dropoffAddress: 'Coco Beach',
-          packageSize: 'large',
-          vehicleType: 'van',
-          amount: 0,
-          driverName: null,
-          rating: null,
-        },
-        {
-          id: 'DEL1005',
-          status: 'delivered',
-          date: '2025-05-28',
-          time: '11:10',
-          pickupAddress: 'Home, 123 Uhuru Street',
-          dropoffAddress: 'University of Dar es Salaam',
-          packageSize: 'medium',
-          vehicleType: 'tuktuk',
-          amount: 5500,
-          driverName: 'Michael K.',
-          rating: 5,
-        },
-      ];
-      
-      setDeliveries(mockDeliveries);
+    const currentUser = authService.getCurrentUser();
+    if (currentUser) {
+      setUserId(currentUser.uid);
+    } else {
+      // Handle case where user is not authenticated (e.g., navigate to login)
       setIsLoading(false);
-    }, 1500);
+      Alert.alert('Error', 'User not authenticated. Please log in.');
+      // Optionally navigate to login screen
+      // navigation.navigate('AuthStack');
+    }
   }, []);
 
-  // Filter deliveries based on active tab
-  const filteredDeliveries = deliveries.filter(delivery => {
-    if (activeTab === 'all') return true;
-    if (activeTab === 'active') return ['accepted', 'arrived_pickup', 'picked_up', 'in_transit', 'arrived_dropoff'].includes(delivery.status);
-    if (activeTab === 'completed') return delivery.status === 'delivered';
-    return true;
-  });
+  useEffect(() => {
+    if (userId) {
+      fetchDeliveries();
+    }
+  }, [userId, activeTab]); // Refetch when userId or activeTab changes
+
+  const fetchDeliveries = async () => {
+    setIsLoading(true);
+    try {
+      const result = await firestoreService.getUserDeliveries(userId, 'customer');
+      if (result.success) {
+        let fetchedDeliveries = result.deliveries;
+
+        // Filter based on activeTab
+        if (activeTab === 'active') {
+          fetchedDeliveries = fetchedDeliveries.filter(delivery =>
+            ['accepted', 'arrived_pickup', 'picked_up', 'in_transit', 'arrived_dropoff'].includes(delivery.status)
+          );
+        } else if (activeTab === 'completed') {
+          fetchedDeliveries = fetchedDeliveries.filter(delivery => delivery.status === 'delivered');
+        }
+        setDeliveries(fetchedDeliveries);
+      } else {
+        Alert.alert('Error', result.error || 'Failed to fetch deliveries');
+      }
+    } catch (error) {
+      console.error('Error fetching deliveries:', error);
+      Alert.alert('Error', 'An unexpected error occurred while fetching deliveries.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -142,9 +107,9 @@ const DeliveryHistoryScreen = ({ navigation }) => {
     switch (vehicleType) {
       case 'boda':
         return 'bicycle-outline';
-      case 'tuktuk':
+      case 'bajaji': // Added bajaji
         return 'car-outline';
-      case 'van':
+      case 'guta': // Added guta
         return 'car-sport-outline';
       default:
         return 'cube-outline';
@@ -166,32 +131,32 @@ const DeliveryHistoryScreen = ({ navigation }) => {
   };
 
   const renderDeliveryItem = ({ item }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={styles.deliveryCard}
       onPress={() => handleDeliveryPress(item)}>
       <View style={styles.deliveryHeader}>
         <View style={styles.deliveryIdContainer}>
           <Text style={styles.deliveryId}>{item.id}</Text>
-          <Text style={styles.deliveryDate}>{item.date} • {item.time}</Text>
+          <Text style={styles.deliveryDate}>{item.createdAt?.toDate().toLocaleDateString()} • {item.createdAt?.toDate().toLocaleTimeString()}</Text>
         </View>
         <View style={styles.statusContainer}>
-          <View 
+          <View
             style={[
-              styles.statusIndicator, 
+              styles.statusIndicator,
               { backgroundColor: getStatusColor(item.status) }
-            ]} 
+            ]}
           />
           <Text style={styles.statusText}>{getStatusText(item.status)}</Text>
         </View>
       </View>
-      
+
       <View style={styles.deliveryDetails}>
         <View style={styles.locationRow}>
           <View style={styles.locationIcon}>
             <Ionicons name="locate" size={16} color="#0066cc" />
           </View>
           <Text style={styles.locationText} numberOfLines={1}>
-            {item.pickupAddress}
+            {item.pickupLocation?.address || 'N/A'}
           </Text>
         </View>
         <View style={styles.routeDivider}>
@@ -202,37 +167,38 @@ const DeliveryHistoryScreen = ({ navigation }) => {
             <Ionicons name="location" size={16} color="#ff6b6b" />
           </View>
           <Text style={styles.locationText} numberOfLines={1}>
-            {item.dropoffAddress}
+            {item.dropoffLocation?.address || 'N/A'}
           </Text>
         </View>
       </View>
-      
+
       <View style={styles.deliveryFooter}>
         <View style={styles.packageInfo}>
           <Ionicons name={getVehicleIcon(item.vehicleType)} size={16} color="#666" />
           <Text style={styles.packageInfoText}>
-            {item.vehicleType === 'boda' ? 'Boda Boda' : 
-             item.vehicleType === 'tuktuk' ? 'Tuk Tuk' : 'Van'} • 
-            {item.packageSize === 'small' ? ' Small' : 
+            {item.vehicleType === 'boda' ? 'Boda Boda' :
+             item.vehicleType === 'bajaji' ? 'Bajaji' :
+             item.vehicleType === 'guta' ? 'Guta' : 'Unknown'} •
+            {item.packageSize === 'small' ? ' Small' :
              item.packageSize === 'medium' ? ' Medium' : ' Large'} package
           </Text>
         </View>
-        
+
         {item.status !== 'cancelled' && (
-          <Text style={styles.deliveryAmount}>{formatPrice(item.amount)}</Text>
+          <Text style={styles.deliveryAmount}>{formatPrice(item.fareDetails?.total || 0)}</Text>
         )}
       </View>
-      
+
       {item.status === 'delivered' && item.rating && (
         <View style={styles.ratingContainer}>
           <Text style={styles.ratingLabel}>Your Rating:</Text>
           <View style={styles.starsContainer}>
             {[1, 2, 3, 4, 5].map((star) => (
-              <Ionicons 
+              <Ionicons
                 key={star}
-                name={star <= item.rating ? "star" : "star-outline"} 
-                size={16} 
-                color="#ffc107" 
+                name={star <= item.rating ? "star" : "star-outline"}
+                size={16}
+                color="#ffc107"
               />
             ))}
           </View>
@@ -248,9 +214,9 @@ const DeliveryHistoryScreen = ({ navigation }) => {
         <TouchableOpacity
           style={[styles.tab, activeTab === 'all' && styles.activeTab]}
           onPress={() => setActiveTab('all')}>
-          <Text 
+          <Text
             style={[
-              styles.tabText, 
+              styles.tabText,
               activeTab === 'all' && styles.activeTabText
             ]}>
             All
@@ -259,9 +225,9 @@ const DeliveryHistoryScreen = ({ navigation }) => {
         <TouchableOpacity
           style={[styles.tab, activeTab === 'active' && styles.activeTab]}
           onPress={() => setActiveTab('active')}>
-          <Text 
+          <Text
             style={[
-              styles.tabText, 
+              styles.tabText,
               activeTab === 'active' && styles.activeTabText
             ]}>
             Active
@@ -270,27 +236,27 @@ const DeliveryHistoryScreen = ({ navigation }) => {
         <TouchableOpacity
           style={[styles.tab, activeTab === 'completed' && styles.activeTab]}
           onPress={() => setActiveTab('completed')}>
-          <Text 
+          <Text
             style={[
-              styles.tabText, 
+              styles.tabText,
               activeTab === 'completed' && styles.activeTabText
             ]}>
             Completed
           </Text>
         </TouchableOpacity>
       </View>
-      
+
       {isLoading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#0066cc" />
           <Text style={styles.loadingText}>Loading delivery history...</Text>
         </View>
-      ) : filteredDeliveries.length === 0 ? (
+      ) : deliveries.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Ionicons name="cube-outline" size={60} color="#ccc" />
           <Text style={styles.emptyText}>No deliveries found</Text>
           <Text style={styles.emptySubtext}>
-            {activeTab === 'all' 
+            {activeTab === 'all'
               ? 'You haven\'t made any deliveries yet'
               : activeTab === 'active'
                 ? 'You don\'t have any active deliveries'
@@ -299,7 +265,7 @@ const DeliveryHistoryScreen = ({ navigation }) => {
         </View>
       ) : (
         <FlatList
-          data={filteredDeliveries}
+          data={deliveries}
           renderItem={renderDeliveryItem}
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContent}
@@ -488,3 +454,5 @@ const styles = StyleSheet.create({
 });
 
 export default DeliveryHistoryScreen;
+
+

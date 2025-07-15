@@ -11,6 +11,8 @@ import {
   Alert,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import AuthService from '../../services/AuthService';
+import FirestoreService from '../../services/FirestoreService';
 
 const PaymentScreen = ({ route, navigation }) => {
   const { packageDetails, pickupLocation, dropoffLocation, selectedVehicle, fareDetails } = route.params || {};
@@ -26,59 +28,143 @@ const PaymentScreen = ({ route, navigation }) => {
     { id: 'cash', name: 'Cash on Delivery', icon: 'cash' },
   ];
 
-  const handlePayment = () => {
-  // Cash on Delivery payment option
-    if (paymentMethod === 'cash') {
-        // For cash payment, navigate directly to tracking
-        navigation.navigate('Tracking', {
-          deliveryId: 'DEL' + Math.floor(Math.random() * 10000),
-          packageDetails,
-          pickupLocation,
-          dropoffLocation,
-          selectedVehicle,
-          fareDetails,
-          paymentMethod: 'cash', // Add payment method to params
-        });
-        return;
-    }
+ const handlePayment = async () => {
+   if (paymentMethod === 'cash') {
+     setIsProcessing(true);
+     try {
+       const userId = AuthService.getCurrentUser()?.uid;
+       if (!userId) throw new Error('User not authenticated');
 
-    // Basic validation
-    if (!phoneNumber || phoneNumber.length < 9) {
-      Alert.alert('Invalid Phone Number', 'Please enter a valid phone number');
-      return;
-    }
+       // 1. Create delivery request
+       const requestData = {
+         customerId: userId,
+         packageDetails,
+         pickupLocation,
+         dropoffLocation,
+         selectedVehicle,
+         fareDetails,
+         paymentMethod: 'cash',
+         status: 'pending'
+       };
 
-    setIsProcessing(true);
+       const requestResult = await FirestoreService.createDeliveryRequest(requestData);
 
-    // Simulate M-Pesa STK push API call
-    setTimeout(() => {
-      setIsProcessing(false);
-      
-      // Show success message and navigate to tracking
-      Alert.alert(
-        'Payment Initiated',
-        'Please check your phone for the M-Pesa payment prompt and enter your PIN to complete the payment.',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              // In a real app, we would listen for payment confirmation
-              // For demo, we'll simulate a successful payment
-              navigation.navigate('Tracking', {
-                deliveryId: 'DEL' + Math.floor(Math.random() * 10000),
-                packageDetails,
-                pickupLocation,
-                dropoffLocation,
-                selectedVehicle,
-                fareDetails,
-                paymentMethod,
-              });
-            },
-          },
-        ]
-      );
-    }, 2000);
-  };
+       console.log('Delivery request created:', requestResult);
+
+       if (!requestResult.success) throw new Error('Failed to create delivery request');
+
+       // 2. Create delivery document
+       const deliveryData = {
+         requestId: requestResult.requestId,
+         customerId: userId,
+         packageDetails,
+         pickupLocation,
+         dropoffLocation,
+         selectedVehicle,
+         fareDetails,
+         paymentMethod: 'cash',
+         status: 'pending',
+       };
+
+       const deliveryResult = await FirestoreService.createDelivery(deliveryData);
+
+       console.log('Delivery document created:', deliveryResult);
+
+       if (!deliveryResult.success) throw new Error('Failed to create delivery');
+
+       navigation.navigate('Tracking', {
+         deliveryId: deliveryResult.deliveryId, // Use the delivery ID, not request ID
+         packageDetails,
+         pickupLocation,
+         dropoffLocation,
+         selectedVehicle,
+         fareDetails,
+         paymentMethod: 'cash',
+       });
+     } catch (error) {
+       console.error('Error:', error);
+       Alert.alert('Error', 'Failed to process your order');
+     } finally {
+       setIsProcessing(false);
+     }
+     return;
+   }
+
+   // Similar changes for mobile payments...
+   // For mobile payments
+   if (!phoneNumber || phoneNumber.length < 9) {
+     Alert.alert('Invalid Phone Number', 'Please enter a valid phone number');
+     return;
+   }
+
+   setIsProcessing(true);
+
+   try {
+     const userId = AuthService.getCurrentUser()?.uid;
+     if (!userId) throw new Error('User not authenticated');
+
+     // 1. Create delivery request
+     const requestData = {
+       customerId: userId,
+       packageDetails,
+       pickupLocation,
+       dropoffLocation,
+       selectedVehicle,
+       fareDetails,
+       paymentMethod,
+       status: 'pending'
+     };
+
+     const requestResult = await FirestoreService.createDeliveryRequest(requestData);
+     if (!requestResult.success) throw new Error('Failed to create delivery request');
+
+     // 2. Create delivery document
+     const deliveryData = {
+       requestId: requestResult.requestId,
+       customerId: userId,
+       packageDetails,
+       pickupLocation,
+       dropoffLocation,
+       selectedVehicle,
+       fareDetails,
+       paymentMethod,
+       status: 'pending',
+     };
+
+     const deliveryResult = await FirestoreService.createDelivery(deliveryData);
+     if (!deliveryResult.success) throw new Error('Failed to create delivery');
+
+     // Simulate payment processing
+     setTimeout(() => {
+       setIsProcessing(false);
+
+       Alert.alert(
+         'Payment Initiated',
+         'Please check your phone for the payment prompt and enter your PIN to complete the payment.',
+         [
+           {
+             text: 'OK',
+             onPress: () => {
+               navigation.navigate('Tracking', {
+                 deliveryId: deliveryResult.deliveryId,
+                 packageDetails,
+                 pickupLocation,
+                 dropoffLocation,
+                 selectedVehicle,
+                 fareDetails,
+                 paymentMethod,
+               });
+             },
+           },
+         ]
+       );
+     }, 2000);
+   } catch (error) {
+     console.error('Error:', error);
+     setIsProcessing(false);
+     Alert.alert('Error', 'Failed to process your order');
+   }
+ };
 
   const formatPrice = (price) => {
     return `TZS ${price.toLocaleString()}`;

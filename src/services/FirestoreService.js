@@ -182,14 +182,17 @@ class FirestoreService {
     try {
       const delivery = {
         ...deliveryData,
-        status: 'accepted',
+        status: 'pending',
         createdAt: serverTimestamp(),
         timeline: {
-          accepted: serverTimestamp()
+          pending: serverTimestamp()
         }
       };
 
       const docRef = await addDoc(collection(this.db, 'deliveries'), delivery);
+
+      // Add searching status update
+      await this.updateDeliveryStatus(docRef.id, 'searching');
 
       return {
         success: true,
@@ -210,7 +213,11 @@ class FirestoreService {
         ...additionalData
       };
 
-      updateData[`timeline.${status}`] = serverTimestamp();
+      // Only add to timeline if not already present
+      if (!updateData[`timeline.${status}`]) {
+        updateData[`timeline.${status}`] = serverTimestamp();
+      }
+
       await updateDoc(doc(this.db, 'deliveries', deliveryId), updateData);
       return { success: true };
     } catch (error) {
@@ -263,6 +270,23 @@ class FirestoreService {
   }
 
   // Driver Location Management
+  async assignDriverToDelivery(deliveryId, driverId) {
+    try {
+      const updateData = {
+        driverId,
+        status: 'accepted',
+        updatedAt: serverTimestamp(),
+        [`timeline.accepted`]: serverTimestamp()
+      };
+
+      await updateDoc(doc(this.db, 'deliveries', deliveryId), updateData);
+      return { success: true };
+    } catch (error) {
+      console.error('Error assigning driver:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
   async updateDriverLocation(driverId, location) {
     try {
       const locationData = {

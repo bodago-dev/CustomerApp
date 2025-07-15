@@ -36,6 +36,7 @@ const UserProfileScreen = ({ route, navigation }) => {
           firstName: firstName.trim(),
           lastName: lastName.trim(),
           email: email.trim(),
+          role: 'customer', // Automatically assign 'customer' role
         };
 
         // Use authService to create profile
@@ -68,7 +69,7 @@ const UserProfileScreen = ({ route, navigation }) => {
       } finally {
         setIsLoading(false);
       }
-    }; // This closes handleSaveProfile
+    };
 
   return (
     <KeyboardAvoidingView
@@ -244,3 +245,5 @@ const styles = StyleSheet.create({
 });
 
 export default UserProfileScreen;
+
+
