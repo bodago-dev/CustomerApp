@@ -156,6 +156,7 @@ const LocationSelectionScreen = ({ route, navigation }) => {
         region={mapRegion}
         onPress={handleMapPress}
         onMapReady={() => setMapLoaded(true)}
+        mapType="standard"
       >
         {pickupLocation && (
           <Marker

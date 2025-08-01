@@ -95,7 +95,7 @@ const TrackingScreen = ({ route, navigation }) => {
         id: key,
         status: getStatusText(key),
         time: value?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        description: `Delivery status updated to ${getStatusText(key)}.`,
+        description: `Delivery status updated to ${getStatusText(deliveryStatus)}.`,
       }))
       .sort((a, b) => new Date(a.time) - new Date(b.time));
 
@@ -110,6 +110,8 @@ const TrackingScreen = ({ route, navigation }) => {
       );
     }
   }, [deliveryStatus, driverInfo, fetchDriverInfo, isValidStatusTransition]);
+
+  console.log('Driver Info:', driverInfo);
 
   useEffect(() => {
     if (!deliveryId) {
@@ -314,11 +316,11 @@ const TrackingScreen = ({ route, navigation }) => {
           <Marker
             coordinate={driverLocation}
             title={driverInfo?.firstName || 'Driver'}
-            description={`${driverInfo?.vehicleType || ''} • ${driverInfo?.vehiclePlate || ''}`}
+            description={`${driverInfo.vehicleInfo?.vehicleType || ''} • ${driverInfo.vehicleInfo?.vehiclePlate || ''}`}
           >
             <View style={[styles.markerContainer, { backgroundColor: '#0066cc' }]}>
               <Ionicons
-                name={getVehicleIcon(driverInfo?.vehicleType)}
+                name={getVehicleIcon(driverInfo.vehicleInfo?.vehicleType)}
                 size={16}
                 color="#fff"
               />
@@ -393,13 +395,13 @@ const TrackingScreen = ({ route, navigation }) => {
                 <View style={styles.driverRating}>
                   <Ionicons name="star" size={14} color="#ffc107" />
                   <Text style={styles.driverRatingText}>
-                    {driverInfo.rating ? driverInfo.rating.toFixed(1) : 'N/A'}
+                    {driverInfo.rating ? driverInfo.rating.toFixed(1) : '4.8'}
                   </Text>
                 </View>
                 <Text style={styles.vehicleInfo}>
-                  {driverInfo.vehicleType === 'boda' ? 'Boda Boda' :
-                   driverInfo.vehicleType === 'bajaji' ? 'Bajaji' :
-                   driverInfo.vehicleType === 'guta' ? 'Guta' : 'Unknown'} • {driverInfo.vehiclePlate || 'N/A'}
+                  {driverInfo.vehicleInfo?.vehicleType === 'boda' ? 'Boda Boda' :
+                   driverInfo.vehicleInfo?.vehicleType === 'bajaji' ? 'Bajaji' :
+                   driverInfo.vehicleInfo?.vehicleType === 'guta' ? 'Guta' : 'Unknown'} • {driverInfo.vehicleInfo?.licensePlate || 'N/A'}
                 </Text>
               </View>
             </View>
