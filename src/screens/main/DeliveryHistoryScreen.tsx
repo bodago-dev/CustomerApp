@@ -65,6 +65,8 @@ const DeliveryHistoryScreen = ({ navigation }) => {
     }
   };
 
+  console.log('Deliveries:', deliveries);
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'delivered':
@@ -184,13 +186,13 @@ const DeliveryHistoryScreen = ({ navigation }) => {
 
       <View style={styles.deliveryFooter}>
         <View style={styles.packageInfo}>
-          <Ionicons name={getVehicleIcon(item.vehicleType)} size={16} color="#666" />
+          <Ionicons name={getVehicleIcon(item.selectedVehicle)} size={16} color="#666" />
           <Text style={styles.packageInfoText}>
-            {item.vehicleType === 'boda' ? 'Boda Boda' :
-             item.vehicleType === 'bajaji' ? 'Bajaji' :
-             item.vehicleType === 'guta' ? 'Guta' : 'Unknown'} •
-            {item.packageSize === 'small' ? ' Small' :
-             item.packageSize === 'medium' ? ' Medium' : ' Large'} package
+            {item.selectedVehicle.id === 'boda' ? 'Boda Boda' :
+             item.selectedVehicle.id === 'bajaji' ? 'Bajaji' :
+             item.selectedVehicle.id === 'guta' ? 'Guta' : 'Unknown'} •
+            {item.packageDetails.size === 'small' ? ' Small' :
+             item.packageDetails.size === 'medium' ? ' Medium' : ' Large'} package
           </Text>
         </View>
 

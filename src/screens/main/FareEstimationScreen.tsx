@@ -143,7 +143,7 @@ const FareEstimationScreen = ({ route, navigation }) => {
                 <Ionicons 
                   name={
                     selectedVehicle.id === 'boda' ? 'bicycle' :
-                    selectedVehicle.id === 'bajaji' ? 'bike-scooter' :
+                    selectedVehicle.id === 'bajaji' ? 'car' :
                     selectedVehicle.id === 'guta' ? 'dump-truck' : 'car'
                   } 
                   size={16} 
