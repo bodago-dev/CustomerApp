@@ -28,9 +28,9 @@ const PackageDetailsScreen = ({ navigation }) => {
   ];
 
   const packageSizes = [
-    { id: 'small', label: 'Small', description: 'Fits in a shoebox', icon: 'cube-outline' },
-    { id: 'medium', label: 'Medium', description: 'Fits in a backpack', icon: 'cube' },
-    { id: 'large', label: 'Large', description: 'Fits in a suitcase', icon: 'cube' },
+    { id: 'small', label: 'Small', description: 'Fits up to 25kg', icon: 'cube-outline' },
+    { id: 'medium', label: 'Medium', description: 'Fits up to 75kg', icon: 'cube' },
+    { id: 'large', label: 'Large', description: 'Fits 75kg and above', icon: 'cube' },
   ];
 
   const packageWeights = [

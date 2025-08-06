@@ -111,7 +111,7 @@ const TrackingScreen = ({ route, navigation }) => {
     }
   }, [deliveryStatus, driverInfo, fetchDriverInfo, isValidStatusTransition]);
 
-  console.log('Driver Info:', driverInfo);
+// console.log('Driver Info:', delivery);
 
   useEffect(() => {
     if (!deliveryId) {
@@ -228,7 +228,7 @@ const TrackingScreen = ({ route, navigation }) => {
   const getVehicleIcon = (vehicleType) => {
     switch (vehicleType) {
       case 'boda':
-        return 'motorcycle';
+        return 'car';
       case 'bajaji':
         return 'car';
       case 'guta':
@@ -284,6 +284,8 @@ const TrackingScreen = ({ route, navigation }) => {
         style={styles.map}
         region={mapRegion}
         onRegionChangeComplete={setMapRegion}
+        mapType="standard"
+        userInterfaceStyle="light"
       >
         {/* Pickup Marker */}
         {pickupCoords.latitude && pickupCoords.longitude && (
@@ -320,7 +322,7 @@ const TrackingScreen = ({ route, navigation }) => {
           >
             <View style={[styles.markerContainer, { backgroundColor: '#0066cc' }]}>
               <Ionicons
-                name={getVehicleIcon(driverInfo.vehicleInfo?.vehicleType)}
+                name={getVehicleIcon(deliveryData.selectedVehicle?.id)}
                 size={16}
                 color="#fff"
               />

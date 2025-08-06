@@ -123,10 +123,20 @@ const DeliveryHistoryScreen = ({ navigation }) => {
   const handleDeliveryPress = (delivery) => {
     if (['accepted', 'arrived_pickup', 'picked_up', 'in_transit', 'arrived_dropoff'].includes(delivery.status)) {
       // Navigate to tracking screen for active deliveries
-      navigation.navigate('Tracking', { deliveryId: delivery.id });
-    } else if (delivery.status === 'delivered') {
-      // Show delivery details for completed deliveries
-      navigation.navigate('DeliveryDetails', { deliveryId: delivery.id });
+      navigation.navigate('DeliveryTab', {
+        screen: 'Tracking',
+        params: {
+          deliveryId: delivery.id
+        }
+      });
+    } else {
+      // Navigate to delivery details screen for completed/cancelled deliveries
+      navigation.navigate('DeliveryTab', {
+        screen: 'DeliveryDetails',
+        params: {
+          deliveryId: delivery.id
+        }
+      });
     }
   };
 

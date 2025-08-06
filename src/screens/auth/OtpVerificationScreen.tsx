@@ -91,6 +91,7 @@ const OtpVerificationScreen = ({ route, navigation }) => {
       const result = await authService.verifyOTP(verificationId, otpCode);
       if (result.success) {
         if (result.isNewUser) {
+          console.log('Navigating to UserProfile with phoneNumber:', phoneNumber);
           navigation.replace('UserProfile', {
             phoneNumber,
             verificationId

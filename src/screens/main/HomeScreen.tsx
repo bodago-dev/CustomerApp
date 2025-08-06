@@ -1,3 +1,4 @@
+// HomeScreen.tsx
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
@@ -23,11 +24,22 @@ type Location = {
 type Delivery = {
   id: string;
   status: string;
-  pickupAddress: string;
-  dropoffAddress: string;
+  pickupLocation: {
+    address: string;
+    coordinates?: {
+      latitude: number;
+      longitude: number;
+    };
+  };
+  dropoffLocation: {
+    address: string;
+    coordinates?: {
+      latitude: number;
+      longitude: number;
+    };
+  };
   driverName: string;
   vehicleType: string;
-  estimatedArrival: string;
   timeline?: {
     [key: string]: Date;
   };
@@ -40,10 +52,10 @@ const HomeScreen = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  // In the fetchData function, we'll get the user profile data
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
+      setRefreshing(true);
 
       // 1. Get current user from AuthService
       const currentUser = AuthService.getCurrentUser();
@@ -53,10 +65,7 @@ const HomeScreen = ({ navigation }) => {
         // 2. Fetch user's profile data from Firestore
         const profileResponse = await FirestoreService.getUserProfile(currentUser.uid);
         if (profileResponse.success) {
-          // Set the user profile data which includes the first name
           setUser(prev => ({ ...prev, ...profileResponse.userProfile }));
-
-          // Also set recent locations if available
           if (profileResponse.userProfile?.recentLocations) {
             setRecentLocations(profileResponse.userProfile.recentLocations);
           }
@@ -65,9 +74,12 @@ const HomeScreen = ({ navigation }) => {
         // 3. Fetch active deliveries from Firestore
         const deliveriesResponse = await FirestoreService.getUserDeliveries(currentUser.uid);
         if (deliveriesResponse.success) {
-          setActiveDeliveries(deliveriesResponse.deliveries.filter(
-            (delivery: Delivery) => ['accepted', 'in_progress'].includes(delivery.status)
-          ));
+          // Filter for active deliveries (statuses that indicate delivery is in progress)
+          const active = deliveriesResponse.deliveries.filter(
+            (delivery: Delivery) => 
+              ['searching', 'accepted', 'arrived_pickup', 'picked_up', 'in_transit', 'arrived_dropoff'].includes(delivery.status)
+          );
+          setActiveDeliveries(active);
         }
       }
     } catch (error) {
@@ -78,18 +90,14 @@ const HomeScreen = ({ navigation }) => {
     }
   }, []);
 
-  // Initial data load
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // Pull-to-refresh handler
   const onRefresh = useCallback(() => {
-    setRefreshing(true);
     fetchData();
   }, [fetchData]);
 
-  // Navigation handlers
   const handleStartDelivery = useCallback(() => {
     navigation.navigate('PackageDetails');
   }, [navigation]);
@@ -108,7 +116,6 @@ const HomeScreen = ({ navigation }) => {
     navigation.navigate('ProfileTab');
   }, [navigation]);
 
-  // Format estimated arrival time
   const formatEstimatedArrival = (delivery: Delivery) => {
     if (!delivery.timeline?.accepted) return 'Calculating...';
 
@@ -120,6 +127,40 @@ const HomeScreen = ({ navigation }) => {
     return diffMinutes > 0 ? `~${diffMinutes} min` : 'Arriving soon';
   };
 
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'searching':
+        return 'Looking for driver';
+      case 'accepted':
+        return 'Driver assigned';
+      case 'arrived_pickup':
+        return 'Driver at pickup';
+      case 'picked_up':
+        return 'Package picked up';
+      case 'in_transit':
+        return 'In transit';
+      case 'arrived_dropoff':
+        return 'Arrived at destination';
+      default:
+        return 'In progress';
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'searching':
+        return '#FFA500'; // Orange
+      case 'accepted':
+      case 'arrived_pickup':
+      case 'picked_up':
+      case 'in_transit':
+      case 'arrived_dropoff':
+        return '#2196F3'; // Blue
+      default:
+        return '#FFA500'; // Orange
+    }
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -127,6 +168,7 @@ const HomeScreen = ({ navigation }) => {
       </View>
     );
   }
+
 
   return (
     <ScrollView
@@ -172,24 +214,24 @@ const HomeScreen = ({ navigation }) => {
               <View style={styles.deliveryStatusContainer}>
                 <View style={[
                   styles.statusIndicator,
-                  { backgroundColor: delivery.status === 'accepted' ? '#FFA500' : '#4CAF50' }
+                  { backgroundColor: getStatusColor(delivery.status) }
                 ]} />
                 <Text style={styles.deliveryStatus}>
-                  {delivery.status === 'accepted' ? 'Driver Assigned' : 'In Transit'}
+                  {getStatusText(delivery.status)}
                 </Text>
               </View>
               <View style={styles.deliveryDetails}>
                 <View style={styles.addressRow}>
                   <Ionicons name="locate" size={16} color="#0066cc" />
                   <Text style={styles.addressText} numberOfLines={1}>
-                    {delivery.pickupAddress}
+                    {delivery.pickupLocation?.address || 'Pickup location'}
                   </Text>
                 </View>
                 <View style={styles.addressDivider} />
                 <View style={styles.addressRow}>
                   <Ionicons name="location" size={16} color="#ff6b6b" />
                   <Text style={styles.addressText} numberOfLines={1}>
-                    {delivery.dropoffAddress}
+                    {delivery.dropoffLocation?.address || 'Dropoff location'}
                   </Text>
                 </View>
               </View>
@@ -197,21 +239,21 @@ const HomeScreen = ({ navigation }) => {
                 <View style={styles.driverInfo}>
                   <Ionicons
                     name={
-                      delivery.vehicleType === 'Boda Boda'
-                        ? 'bicycle'
-                        : delivery.vehicleType === 'Tuk Tuk'
-                        ? 'car'
-                        : 'bus'
+                      delivery.selectedVehicle.id === 'boda' ? 'bicycle' :
+                      delivery.selectedVehicle.id === 'bajaji' ? 'car' :
+                      'car'
                     }
                     size={14}
                     color="#666"
                   />
-                  <Text style={styles.driverText}>{delivery.driverName}</Text>
+                  <Text style={styles.driverText}>{delivery.selectedVehicle.name || 'Driver not assigned'}</Text>
                 </View>
-                <View style={styles.etaContainer}>
-                  <Ionicons name="time-outline" size={14} color="#666" />
-                  <Text style={styles.etaText}>{formatEstimatedArrival(delivery)}</Text>
-                </View>
+                {delivery.timeline?.accepted && (
+                  <View style={styles.etaContainer}>
+                    <Ionicons name="time-outline" size={14} color="#666" />
+                    <Text style={styles.etaText}>{formatEstimatedArrival(delivery)}</Text>
+                  </View>
+                )}
               </View>
               <View style={styles.trackButtonContainer}>
                 <Text style={styles.trackButtonText}>Track</Text>
@@ -227,6 +269,7 @@ const HomeScreen = ({ navigation }) => {
         </View>
       )}
 
+      {/* Rest of your HomeScreen content remains the same */}
       {/* Send package button */}
       <TouchableOpacity
         style={styles.sendButton}
@@ -281,6 +324,7 @@ const HomeScreen = ({ navigation }) => {
   );
 };
 
+// Styles remain the same as in your original file
 const styles = StyleSheet.create({
   loadingContainer: {
     flex: 1,
@@ -296,7 +340,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginVertical: 10,
   },
-
   container: {
     flex: 1,
     backgroundColor: '#f8f9fa',

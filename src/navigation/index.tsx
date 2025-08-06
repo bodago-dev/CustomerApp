@@ -22,6 +22,7 @@ import FareEstimationScreen from '../screens/main/FareEstimationScreen';
 import PaymentScreen from '../screens/main/PaymentScreen';
 import TrackingScreen from '../screens/main/TrackingScreen';
 import DeliveryHistoryScreen from '../screens/main/DeliveryHistoryScreen';
+import DeliveryDetailsScreen from '../screens/main/DeliveryDetailsScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
 import SupportScreen from '../screens/main/SupportScreen';
 
@@ -51,11 +52,11 @@ const ProfileCompletionNavigator = () => {
       <ProfileCompletionStack.Screen
         name="UserProfile"
         component={UserProfileScreen}
-        initialParams={{ phoneNumber: 'Fallback Phone', verificationId: 'id' }} // TEMPORARY for testing
+        initialParams={{ phoneNumber: authService.getCurrentUser()?.phoneNumber }}
         options={{
           title: 'Complete Your Profile',
-          headerLeft: () => null, // Disables back button
-          gestureEnabled: false  // Disables swipe back gesture
+          headerLeft: () => null,
+          gestureEnabled: false
         }}
       />
     </ProfileCompletionStack.Navigator>
@@ -73,6 +74,7 @@ const DeliveryNavigator = () => {
       <DeliveryStack.Screen name="FareEstimation" component={FareEstimationScreen} options={{ title: 'Fare Estimate' }} />
       <DeliveryStack.Screen name="Payment" component={PaymentScreen} options={{ title: 'Payment' }} />
       <DeliveryStack.Screen name="Tracking" component={TrackingScreen} options={{ title: 'Track Delivery' }} />
+      <DeliveryStack.Screen name="DeliveryDetails" component={DeliveryDetailsScreen} options={{ title: 'Delivery Details' }} />
     </DeliveryStack.Navigator>
   );
 };
@@ -138,22 +140,36 @@ const TabNavigator = () => {
 
 // Main navigator
 const MainNavigator = () => {
-  const [isLoading, setIsLoading] = useState(true);
-  const [firebaseUser, setFirebaseUser] = useState(null); // Store Firebase user
-  const [userProfile, setUserProfile] = useState(null); // Store user profile from your DB
+const [isLoading, setIsLoading] = useState(true);
+const [firebaseUser, setFirebaseUser] = useState(null);
+const [userProfile, setUserProfile] = useState(null);
 
-  useEffect(() => {
-    // Use your AuthService listener
-    const unsubscribe = authService.addAuthStateListener((fbUser, profile) => {
-      console.log('MainNavigator authService Listener - Firebase User:', fbUser);
-      console.log('MainNavigator authService Listener - User Profile:', profile);
-      setFirebaseUser(fbUser);
-      setUserProfile(profile);
-      setIsLoading(false);
+useEffect(() => {
+    // Get initial state immediately
+    const currentUser = authService.getCurrentUser();
+    const currentProfile = authService.getCurrentUserProfile();
+
+    setFirebaseUser(currentUser);
+    setUserProfile(currentProfile);
+
+    // If we have both, we can show the app immediately
+    if (currentUser && currentProfile) {
+        setIsLoading(false);
+    }
+
+    // Set up listener for changes
+    const unsubscribe = authService.addAuthStateListener((user, profile) => {
+        setFirebaseUser(user);
+        setUserProfile(profile);
+        setIsLoading(false);
     });
 
-    return () => unsubscribe(); // Cleanup
-  }, []); // Empty dependency array, runs once on mount
+    return unsubscribe;
+}, []);
+
+// if (isLoading) {
+//     return <SplashScreen />;
+// }
 
   console.log('MainNavigator DECISION: isLoading=', isLoading);
   if (!isLoading) {
@@ -172,25 +188,26 @@ const MainNavigator = () => {
   }
 
   return (
-  <NavigationContainer ref={navigationRef}>
-    <MainStack.Navigator screenOptions={{ headerShown: false }}>
-      {firebaseUser ? (
-        userProfile ? (
-          <MainStack.Screen name="MainTabs" component={TabNavigator} />
-        ) : (
-          // User authenticated but no profile - show profile completion
-          <MainStack.Screen
-            name="ProfileCompletion"
-            component={ProfileCompletionNavigator}
-          />
-        )
-      ) : (
-        // User not authenticated
-        <MainStack.Screen name="Auth" component={AuthNavigator} />
-      )}
-    </MainStack.Navigator>
-  </NavigationContainer>
-);
-};
+      <NavigationContainer ref={navigationRef}>
+        <MainStack.Navigator screenOptions={{ headerShown: false }}>
+          {firebaseUser ? (
+            userProfile ? (
+              <MainStack.Screen name="MainTabs" component={TabNavigator} />
+            ) : (
+              <MainStack.Screen
+                name="ProfileCompletion"
+                component={ProfileCompletionNavigator}
+                initialParams={{
+                  phoneNumber: firebaseUser.phoneNumber
+                }}
+              />
+            )
+          ) : (
+            <MainStack.Screen name="Auth" component={AuthNavigator} />
+          )}
+        </MainStack.Navigator>
+      </NavigationContainer>
+    );
+  };
 
 export default MainNavigator;

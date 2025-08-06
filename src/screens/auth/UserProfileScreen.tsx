@@ -15,12 +15,18 @@ import authService from '../../services/AuthService';
 import { getAuth, onAuthStateChanged } from '@react-native-firebase/auth';
 
 const UserProfileScreen = ({ route, navigation }) => {
-  const { phoneNumber } = route.params;
+  const { phoneNumber: routePhoneNumber } = route.params || {};
+  const authUser = authService.getCurrentUser();
+  const phoneNumber = routePhoneNumber || authUser?.phoneNumber || '';
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+
+  useEffect(() => {
+    console.log('UserProfileScreen received params:', route.params);
+  }, [route.params]);
 
     // Update the handleSaveProfile function in UserProfileScreen.tsx
     const handleSaveProfile = async () => {

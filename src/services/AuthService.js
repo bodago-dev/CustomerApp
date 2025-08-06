@@ -4,137 +4,193 @@ import { getFirestore, doc, getDoc, setDoc, updateDoc, serverTimestamp } from '@
 
 class AuthService {
     constructor() {
-        console.log('AuthService CONSTRUCTOR: Initializing...'); // <-- ADD LOG
+        console.log('AuthService CONSTRUCTOR: Initializing...');
         this.user = null;
         this.userProfile = null;
         this.authStateListeners = [];
+        this.isInitializing = true;
 
         try {
             // Initialize Firebase services
             this.auth = getAuth();
             this.db = getFirestore();
-            console.log('AuthService CONSTRUCTOR: Firebase services obtained.'); // <-- ADD LOG
+            console.log('AuthService CONSTRUCTOR: Firebase services obtained.');
+
+            // Set initial user state from auth cache
+            this.user = this.auth.currentUser;
+            console.log('AuthService CONSTRUCTOR: Initial user state:', this.user ? this.user.uid : 'null');
+
+            // If user exists, try to load profile immediately
+            if (this.user) {
+                console.log('AuthService CONSTRUCTOR: Loading initial profile for user:', this.user.uid);
+                this.loadUserProfile(this.user.uid)
+                    .finally(() => {
+                        this.isInitializing = false;
+                        this.notifyListeners();
+                    });
+            } else {
+                this.isInitializing = false;
+            }
 
             // Listen for authentication state changes
             this.unsubscribeAuth = onAuthStateChanged(this.auth, this.onAuthStateChanged.bind(this));
-            console.log('AuthService CONSTRUCTOR: Firebase onAuthStateChanged listener attached.'); // <-- ADD LOG
+            console.log('AuthService CONSTRUCTOR: Firebase onAuthStateChanged listener attached.');
         } catch (error) {
-            console.error('AuthService CONSTRUCTOR CRITICAL ERROR:', error); // <-- ADD LOG (Important for catching init failures)
+            console.error('AuthService CONSTRUCTOR CRITICAL ERROR:', error);
+            this.isInitializing = false;
         }
+    }
+
+    // Notify all listeners with current state
+    notifyListeners() {
+        if (this.isInitializing) {
+            console.log('AuthService.notifyListeners: Skipping during initialization');
+            return;
+        }
+
+        console.log('AuthService.notifyListeners: Notifying', this.authStateListeners.length,
+                   'listeners. User:', this.user ? this.user.uid : 'null',
+                   'Profile:', this.userProfile ? 'exists' : 'null');
+
+        this.authStateListeners.forEach(listener => {
+            try {
+                listener(this.user, this.userProfile);
+            } catch (listenerError) {
+                console.error('AuthService.notifyListeners: Error in listener:', listenerError);
+            }
+        });
     }
 
     // Add authentication state listener
     addAuthStateListener(listener) {
-        console.log('AuthService.addAuthStateListener: Adding a new listener.'); // <-- ADD LOG
+        console.log('AuthService.addAuthStateListener: Adding new listener');
         if (typeof listener !== 'function') {
-            console.error('AuthService.addAuthStateListener: Provided listener is not a function!'); // <-- ADD LOG
-            return () => {}; // Return a no-op to prevent errors if MainNavigator tries to call an undefined unsubscribe
+            console.error('AuthService.addAuthStateListener: Provided listener is not a function!');
+            return () => {};
         }
-        this.authStateListeners.push(listener);
-        console.log('AuthService.addAuthStateListener: Listener added. Total listeners:', this.authStateListeners.length); // <-- ADD LOG
 
-        // Immediately notify the new listener with the current state
-        try {
-            console.log('AuthService.addAuthStateListener: Immediately notifying new listener with user:', this.user, 'and profile:', this.userProfile); // <-- ADD LOG
-            listener(this.user, this.userProfile);
-        } catch (error) {
-            console.error("AuthService.addAuthStateListener: Error immediately notifying new listener:", error); // <-- ADD LOG
+        this.authStateListeners.push(listener);
+        console.log('AuthService.addAuthStateListener: Total listeners now:', this.authStateListeners.length);
+
+        // Immediately notify the new listener with current state if initialization is complete
+        if (!this.isInitializing) {
+            console.log('AuthService.addAuthStateListener: Immediately notifying new listener');
+            try {
+                listener(this.user, this.userProfile);
+            } catch (error) {
+                console.error("AuthService.addAuthStateListener: Error notifying new listener:", error);
+            }
         }
 
         // Return unsubscribe function
         return () => {
             const index = this.authStateListeners.indexOf(listener);
-            console.log('AuthService.addAuthStateListener: Attempting to remove listener at index:', index); // <-- ADD LOG
             if (index > -1) {
                 this.authStateListeners.splice(index, 1);
-                console.log('AuthService.addAuthStateListener: Listener removed. Total listeners now:', this.authStateListeners.length); // <-- ADD LOG
+                console.log('AuthService.addAuthStateListener: Listener removed. Total listeners now:', this.authStateListeners.length);
             }
         };
     }
 
+    // Handle auth state changes
     async onAuthStateChanged(user) {
-        console.log('AuthService.onAuthStateChanged: FIRED with user:', user ? user.uid : null); // <-- MODIFIED LOG
+        console.log('AuthService.onAuthStateChanged: Triggered with user:', user ? user.uid : 'null');
+
         this.user = user;
         let loadedProfile = null;
 
         if (user) {
             try {
-                console.log('AuthService.onAuthStateChanged: Loading profile for UID:', user.uid); // <-- ADD LOG
-                const userDoc = await getDoc(doc(this.db, 'users', user.uid));
-                if (userDoc.exists()) {
-                    loadedProfile = userDoc.data();
-                    console.log('AuthService.onAuthStateChanged: Profile FOUND:', loadedProfile); // <-- ADD LOG
-                } else {
-                    console.log('AuthService.onAuthStateChanged: Profile NOT found for UID:', user.uid); // <-- ADD LOG
-                }
+                console.log('AuthService.onAuthStateChanged: Loading profile for user:', user.uid);
+                loadedProfile = await this.loadUserProfile(user.uid);
             } catch (error) {
-                console.error('AuthService.onAuthStateChanged: Error loading user profile:', error);
+                console.error('AuthService.onAuthStateChanged: Error loading profile:', error);
             }
+        } else {
+            this.userProfile = null;
         }
-        this.userProfile = loadedProfile;
 
-        console.log('AuthService.onAuthStateChanged: Notifying', this.authStateListeners.length, 'listeners. Current user:', this.user ? this.user.uid : null, 'Current profile:', this.userProfile); // <-- MODIFIED LOG
-        this.authStateListeners.forEach(listener => {
-            try {
-                listener(this.user, this.userProfile);
-            } catch (listenerError) {
-                console.error('AuthService.onAuthStateChanged: Error in one of the listeners:', listenerError); // <-- ADD LOG
+        // Only notify listeners if we're not in initialization phase
+        if (!this.isInitializing) {
+            this.notifyListeners();
+        }
+    }
+
+    // Load user profile from Firestore
+    async loadUserProfile(uid) {
+        try {
+            console.log('AuthService.loadUserProfile: Loading profile for:', uid);
+            const userDoc = await getDoc(doc(this.db, 'users', uid));
+
+            if (userDoc.exists()) {
+                this.userProfile = userDoc.data();
+                console.log('AuthService.loadUserProfile: Profile loaded successfully');
+                return this.userProfile;
+            } else {
+                console.log('AuthService.loadUserProfile: Profile does not exist for:', uid);
+                this.userProfile = null;
+                return null;
             }
-        });
-        console.log('AuthService.onAuthStateChanged: Listeners notified.'); // <-- ADD LOG
+        } catch (error) {
+            console.error('AuthService.loadUserProfile: Error loading profile:', error);
+            this.userProfile = null;
+            throw error;
+        }
     }
 
     // Send OTP to phone number
     async sendOTP(phoneNumber) {
-            try {
-                const formattedPhone = this.formatPhoneNumber(phoneNumber);
-                console.log('AuthService.sendOTP: Sending OTP to', formattedPhone); // Optional log
-                const confirmation = await signInWithPhoneNumber(this.auth, formattedPhone);
-                return { success: true, confirmation, verificationId: confirmation.verificationId };
-            } catch (error) {
-                console.error('AuthService.sendOTP: Error sending OTP:', error);
-                return { success: false, error: this.getErrorMessage(error) };
-            }
+        try {
+            const formattedPhone = this.formatPhoneNumber(phoneNumber);
+            console.log('AuthService.sendOTP: Sending OTP to', formattedPhone);
+            const confirmation = await signInWithPhoneNumber(this.auth, formattedPhone);
+            return { success: true, confirmation, verificationId: confirmation.verificationId };
+        } catch (error) {
+            console.error('AuthService.sendOTP: Error sending OTP:', error);
+            return { success: false, error: this.getErrorMessage(error) };
         }
+    }
 
     // Verify OTP and complete authentication
     async verifyOTP(verificationId, otp) {
-      try {
+        try {
+            console.log('AuthService.verifyOTP: Verifying OTP with verificationId:', verificationId);
 
-        // Create credential using verificationId and OTP
-        const credential = PhoneAuthProvider.credential(verificationId, otp);
+            // Create credential using verificationId and OTP
+            const credential = PhoneAuthProvider.credential(verificationId, otp);
 
-        // Sign in with the credential
-        const userCredential = await this.auth.signInWithCredential(credential);
-        const user = userCredential.user;
+            // Sign in with the credential
+            const userCredential = await this.auth.signInWithCredential(credential);
+            const user = userCredential.user;
+            console.log('AuthService.verifyOTP: User signed in:', user.uid);
 
-        // Check if user profile exists
-        const userDoc = await getDoc(doc(this.db, 'users', user.uid));
+            // Check if user profile exists
+            const userDoc = await getDoc(doc(this.db, 'users', user.uid));
 
-        if (!userDoc.exists()) {
-          // New user - needs to complete profile
-          return {
-            success: true,
-            user,
-            isNewUser: true
-          };
-        } else {
-          // Existing user
-          this.userProfile = userDoc.data();
-          return {
-            success: true,
-            user,
-            userProfile: this.userProfile,
-            isNewUser: false
-          };
+            if (!userDoc.exists()) {
+                console.log('AuthService.verifyOTP: New user detected');
+                return {
+                    success: true,
+                    user,
+                    isNewUser: true
+                };
+            } else {
+                console.log('AuthService.verifyOTP: Existing user found');
+                this.userProfile = userDoc.data();
+                return {
+                    success: true,
+                    user,
+                    userProfile: this.userProfile,
+                    isNewUser: false
+                };
+            }
+        } catch (error) {
+            console.error('AuthService.verifyOTP: Error verifying OTP:', error);
+            return {
+                success: false,
+                error: this.getErrorMessage(error)
+            };
         }
-      } catch (error) {
-        console.error('Error verifying OTP:', error);
-        return {
-          success: false,
-          error: this.getErrorMessage(error)
-        };
-      }
     }
 
     // Create user profile after successful authentication
@@ -145,6 +201,8 @@ class AuthService {
                 throw new Error('No authenticated user found');
             }
 
+            console.log('AuthService.createUserProfile: Creating profile for:', user.uid);
+
             const userProfileData = {
                 uid: user.uid,
                 phoneNumber: user.phoneNumber,
@@ -154,14 +212,16 @@ class AuthService {
             };
 
             await setDoc(doc(this.db, 'users', user.uid), userProfileData);
-            this.userProfile = userProfileData; // Update local cache in AuthService
+            this.userProfile = userProfileData;
 
-            // Notify listeners that profile is now available
-            this.authStateListeners.forEach(listener => listener(this.user, this.userProfile));
+            console.log('AuthService.createUserProfile: Profile created successfully');
+
+            // Notify listeners about the new profile
+            this.notifyListeners();
 
             return { success: true, userProfile: this.userProfile };
         } catch (error) {
-            console.error('Error creating user profile:', error);
+            console.error('AuthService.createUserProfile: Error creating profile:', error);
             return { success: false, error: this.getErrorMessage(error) };
         }
     }
@@ -174,48 +234,38 @@ class AuthService {
                 throw new Error('No authenticated user found');
             }
 
+            console.log('AuthService.updateUserProfile: Updating profile for:', user.uid);
+
             const updatedData = {
                 ...updates,
                 updatedAt: serverTimestamp()
             };
 
             await updateDoc(doc(this.db, 'users', user.uid), updatedData);
-
             this.userProfile = { ...this.userProfile, ...updatedData };
+
+            console.log('AuthService.updateUserProfile: Profile updated successfully');
+
+            // Notify listeners about the updated profile
+            this.notifyListeners();
+
             return { success: true, userProfile: this.userProfile };
         } catch (error) {
-            console.error('Error updating user profile:', error);
+            console.error('AuthService.updateUserProfile: Error updating profile:', error);
             return { success: false, error: this.getErrorMessage(error) };
         }
-    }
-
-    // Load user profile from Firestore
-    async loadUserProfile(uid) {
-        try {
-            const userDoc = await getDoc(doc(this.db, 'users', uid));
-            if (userDoc.exists()) {
-                this.userProfile = userDoc.data();
-            } else {
-                this.userProfile = null; // Explicitly set to null if not found
-            }
-        } catch (error) {
-            console.error('Error loading user profile:', error);
-            this.userProfile = null; // Ensure profile is null on error
-        }
-        // OPTIONALLY: Re-notify listeners here if loadUserProfile is async and you want them to get the updated profile.
-        // However, the current structure where verifyOTP sets isNewUser and MainNavigator uses authService listener
-        // should work if OtpVerificationScreen handles the initial nav to UserProfile.
-        // For subsequent app loads, this loadUserProfile is key.
     }
 
     // Sign out user
     async signOut() {
         try {
+            console.log('AuthService.signOut: Signing out user');
             await signOut(this.auth);
             this.userProfile = null;
+            console.log('AuthService.signOut: User signed out successfully');
             return { success: true };
         } catch (error) {
-            console.error('Error signing out:', error);
+            console.error('AuthService.signOut: Error signing out:', error);
             return { success: false, error: this.getErrorMessage(error) };
         }
     }
@@ -277,6 +327,7 @@ class AuthService {
 
     // Cleanup on instance destruction
     destroy() {
+        console.log('AuthService.destroy: Cleaning up...');
         this.unsubscribeAuth();
     }
 }
@@ -284,5 +335,3 @@ class AuthService {
 // Create and export singleton instance
 const authService = new AuthService();
 export default authService;
-
-

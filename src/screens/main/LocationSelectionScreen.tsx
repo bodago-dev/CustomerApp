@@ -18,7 +18,7 @@ const { width, height } = Dimensions.get('window');
 
 const LocationSelectionScreen = ({ route, navigation }) => {
   const pickupRef = useRef<GooglePlacesAutocomplete>(null);
-  
+
   const dropoffRef = useRef<GooglePlacesAutocomplete>(null);
 
   const { packageDetails } = route.params || {};
@@ -157,6 +157,7 @@ const LocationSelectionScreen = ({ route, navigation }) => {
         onPress={handleMapPress}
         onMapReady={() => setMapLoaded(true)}
         mapType="standard"
+        userInterfaceStyle="light"
       >
         {pickupLocation && (
           <Marker
