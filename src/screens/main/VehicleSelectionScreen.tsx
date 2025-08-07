@@ -24,7 +24,7 @@ const VehicleSelectionScreen = ({ route, navigation }) => {
       description: 'Motorcycle delivery',
       estimatedTime: '15-25 min',
       price: 3500, // TZS
-      suitableFor: 'Small packages up to 5kg',
+      suitableFor: 'Small packages up to 25kg',
       available: true,
     },
     {
@@ -35,7 +35,7 @@ const VehicleSelectionScreen = ({ route, navigation }) => {
       description: 'Bajaji delivery',
       estimatedTime: '20-30 min',
       price: 5000, // TZS
-      suitableFor: 'Medium packages up to 15kg',
+      suitableFor: 'Medium packages 25kg to 75kg',
       available: true,
     },
     {
@@ -46,7 +46,7 @@ const VehicleSelectionScreen = ({ route, navigation }) => {
       description: 'Guta delivery',
       estimatedTime: '25-40 min',
       price: 8000, // TZS
-      suitableFor: 'Large packages up to 30kg',
+      suitableFor: 'Large packages 75kg and above',
       available: true,
     },
   ];
@@ -54,24 +54,24 @@ const VehicleSelectionScreen = ({ route, navigation }) => {
   // Filter available vehicles based on package size and weight
   const getAvailableVehicles = () => {
     if (!packageDetails) return vehicleOptions;
-    
-    const { size, weight } = packageDetails;
-    
-    if (size === 'large' || weight === 'heavy') {
-      // Only vans can handle large or heavy packages
+
+    const { size } = packageDetails;
+
+    if (size === 'large') {
+      // Only Guta can handle large packages
       return vehicleOptions.map(vehicle => ({
         ...vehicle,
         available: vehicle.id === 'guta',
       }));
-    } else if (size === 'medium' || weight === 'medium') {
-      // Bajajis and gutas can handle medium packages
+    } else if (size === 'medium') {
+      // Bajajis and Gutas can handle medium packages
       return vehicleOptions.map(vehicle => ({
         ...vehicle,
         available: vehicle.id !== 'boda',
       }));
     }
-    
-    // All vehicles can handle small, light packages
+
+    // All vehicles can handle small packages
     return vehicleOptions;
   };
 

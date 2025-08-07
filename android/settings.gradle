@@ -17,3 +17,7 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
+
+include ":react-native-config"
+project(":react-native-config").projectDir = file("../node_modules/react-native-config/android")
+

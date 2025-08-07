@@ -6,18 +6,14 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  Image,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import firestoreService from'../../services/FirestoreService';
 import { Picker } from '@react-native-picker/picker';
 
 const PackageDetailsScreen = ({ navigation }) => {
   const [packageDescription, setPackageDescription] = useState('');
   const [packageSize, setPackageSize] = useState('');
-  const [packageWeight, setPackageWeight] = useState('');
   const [specialInstructions, setSpecialInstructions] = useState('');
-  const [showDropdown, setShowDropdown] = useState(false);
 
   const packageDescriptions = [
     { label: 'Documents', value: 'Documents' },
@@ -28,15 +24,27 @@ const PackageDetailsScreen = ({ navigation }) => {
   ];
 
   const packageSizes = [
-    { id: 'small', label: 'Small', description: 'Fits up to 25kg', icon: 'cube-outline' },
-    { id: 'medium', label: 'Medium', description: 'Fits up to 75kg', icon: 'cube' },
-    { id: 'large', label: 'Large', description: 'Fits 75kg and above', icon: 'cube' },
-  ];
-
-  const packageWeights = [
-    { id: 'light', label: 'Light', description: 'Up to 5kg', icon: 'barbell-outline' },
-    { id: 'medium', label: 'Medium', description: '5-15kg', icon: 'barbell-outline' },
-    { id: 'heavy', label: 'Heavy', description: 'Over 15kg', icon: 'barbell' },
+    {
+      id: 'small',
+      label: 'Small',
+      description: 'Up to 25kg',
+      icon: 'cube-outline',
+      color: '#0722B8'
+    },
+    {
+      id: 'medium',
+      label: 'Medium',
+      description: '25kg to 75kg',
+      icon: 'cube',
+      color: '#059936'
+    },
+    {
+      id: 'large',
+      label: 'Large',
+      description: '75kg and above',
+      icon: 'apps-sharp',
+      color: '#E81005'
+    },
   ];
 
   const handleContinue = () => {
@@ -50,16 +58,11 @@ const PackageDetailsScreen = ({ navigation }) => {
       return;
     }
 
-    if (!packageWeight) {
-      alert('Please select a package weight');
-      return;
-    }
-
     navigation.navigate('LocationSelection', {
       packageDetails: {
         description: packageDescription,
         size: packageSize,
-        weight: packageWeight,
+        weight: packageSize, // Using size as weight reference
         specialInstructions: specialInstructions,
       },
     });
@@ -88,7 +91,7 @@ const PackageDetailsScreen = ({ navigation }) => {
             </Picker>
           </View>
         </View>
-        {/* Rest of the code remains the same */}
+
         {/* Package Size Selection */}
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Package Size</Text>
@@ -104,7 +107,7 @@ const PackageDetailsScreen = ({ navigation }) => {
                 <Ionicons
                   name={size.icon}
                   size={24}
-                  color={packageSize === size.id ? '#0066cc' : '#666'}
+                  color={ size.color }
                 />
                 <Text
                   style={[
@@ -114,36 +117,6 @@ const PackageDetailsScreen = ({ navigation }) => {
                   {size.label}
                 </Text>
                 <Text style={styles.optionDescription}>{size.description}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Package Weight Selection */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Package Weight</Text>
-          <View style={styles.optionsContainer}>
-            {packageWeights.map((weight) => (
-              <TouchableOpacity
-                key={weight.id}
-                style={[
-                  styles.optionCard,
-                  packageWeight === weight.id && styles.selectedOption,
-                ]}
-                onPress={() => setPackageWeight(weight.id)}>
-                <Ionicons
-                  name={weight.icon}
-                  size={24}
-                  color={packageWeight === weight.id ? '#0066cc' : '#666'}
-                />
-                <Text
-                  style={[
-                    styles.optionLabel,
-                    packageWeight === weight.id && styles.selectedOptionText,
-                  ]}>
-                  {weight.label}
-                </Text>
-                <Text style={styles.optionDescription}>{weight.description}</Text>
               </TouchableOpacity>
             ))}
           </View>

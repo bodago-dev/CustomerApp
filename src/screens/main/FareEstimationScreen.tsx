@@ -30,7 +30,7 @@ const FareEstimationScreen = ({ route, navigation }) => {
                                packageDetails.weight === 'medium' ? 500 : 1000;
       
       const subtotal = baseFare + distanceFare + packageSizeFare + packageWeightFare;
-      const serviceFee = Math.round(subtotal * 0.1); // 10% service fee
+      const serviceFee = Math.round(subtotal * 0.18); // 18% service fee
       const total = subtotal + serviceFee;
       
       setFareDetails({
@@ -162,10 +162,9 @@ const FareEstimationScreen = ({ route, navigation }) => {
           </View>
           <View style={styles.detailRow}>
             <View style={styles.detailItem}>
-              <Text style={styles.detailLabel}>Package Weight</Text>
+              <Text style={styles.detailLabel}>Package Description</Text>
               <Text style={styles.detailValue}>
-                {packageDetails.weight === 'light' ? 'Light' : 
-                 packageDetails.weight === 'medium' ? 'Medium' : 'Heavy'}
+                {packageDetails.description}
               </Text>
             </View>
             <View style={styles.detailItem}>

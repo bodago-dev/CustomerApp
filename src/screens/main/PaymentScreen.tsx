@@ -246,9 +246,7 @@ const PaymentScreen = ({ route, navigation }) => {
             <Text style={styles.summaryLabel}>Package</Text>
             <Text style={styles.summaryValue}>
               {packageDetails.size === 'small' ? 'Small' : 
-               packageDetails.size === 'medium' ? 'Medium' : 'Large'}, 
-              {packageDetails.weight === 'light' ? ' Light' : 
-               packageDetails.weight === 'medium' ? ' Medium' : ' Heavy'}
+               packageDetails.size === 'medium' ? 'Medium' : 'Large'}
             </Text>
           </View>
           

@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Platform,
   KeyboardAvoidingView,
+  ScrollView,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
@@ -18,7 +19,6 @@ const { width, height } = Dimensions.get('window');
 
 const LocationSelectionScreen = ({ route, navigation }) => {
   const pickupRef = useRef<GooglePlacesAutocomplete>(null);
-
   const dropoffRef = useRef<GooglePlacesAutocomplete>(null);
 
   const { packageDetails } = route.params || {};
@@ -65,8 +65,8 @@ const LocationSelectionScreen = ({ route, navigation }) => {
     setMapRegion({
       latitude: details.geometry.location.lat,
       longitude: details.geometry.location.lng,
-      latitudeDelta: 0.0922,
-      longitudeDelta: 0.0421,
+      latitudeDelta: 0.005, // Closer zoom for selected location
+      longitudeDelta: 0.005, // Closer zoom for selected location
     });
   };
 
@@ -158,6 +158,8 @@ const LocationSelectionScreen = ({ route, navigation }) => {
         onMapReady={() => setMapLoaded(true)}
         mapType="standard"
         userInterfaceStyle="light"
+        showsUserLocation={true}
+        showsMyLocationButton={true}
       >
         {pickupLocation && (
           <Marker
@@ -178,17 +180,18 @@ const LocationSelectionScreen = ({ route, navigation }) => {
       </MapView>
 
       <View style={styles.inputPanel}>
-        <View>
+          <Text style={styles.panelTitle}>Select Locations</Text>
           {/* Pickup Location */}
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>Pickup Location</Text>
             {apiReady ? (
+              // For the pickup location autocomplete
               <GooglePlacesAutocomplete
+                key="pickup-autocomplete"
                 ref={pickupRef}
                 placeholder="Enter pickup location"
                 returnKeyType={'search'}
                 listViewDisplayed="auto"
-                predefinedPlaces={[]}
                 fetchDetails={true}
                 onPress={(data, details = null) => {
                   handleLocationSelect(data, details, 'pickup');
@@ -242,12 +245,13 @@ const LocationSelectionScreen = ({ route, navigation }) => {
                   </View>
                 )}
                 onFail={handleApiError}
-                onNotFound={() => alert('No results found for your search')}
+                onNotFound={() => console.log('No results found')} // Changed from alert to console.log
                 suppressDefaultStyles={false}
                 currentLocation={false}
+                predefinedPlaces={[]} // Add this to ensure predefinedPlaces is always defined
               />
             ) : (
-              <Text style={{ color: 'red' }}>Google Places API not configured</Text>
+              <Text style={styles.apiErrorText}>Google Places API not configured</Text>
             )}
           </View>
 
@@ -256,6 +260,7 @@ const LocationSelectionScreen = ({ route, navigation }) => {
             <Text style={styles.inputLabel}>Dropoff Location</Text>
             {apiReady ? (
               <GooglePlacesAutocomplete
+                key="dropoff-autocomplete" // Added key for better re-rendering
                 ref={dropoffRef}
                 placeholder="Enter dropoff location"
                 returnKeyType={'search'}
@@ -319,7 +324,7 @@ const LocationSelectionScreen = ({ route, navigation }) => {
                 currentLocation={false}
               />
             ) : (
-              <Text style={{ color: 'red' }}>Google Places API not configured</Text>
+              <Text style={styles.apiErrorText}>Google Places API not configured</Text>
             )}
           </View>
 
@@ -335,7 +340,6 @@ const LocationSelectionScreen = ({ route, navigation }) => {
             <Text style={styles.continueButtonText}>Continue</Text>
             <Ionicons name="arrow-forward" size={20} color="#fff" />
           </TouchableOpacity>
-        </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -364,6 +368,13 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 5,
     elevation: 5,
+  },
+  panelTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 20,
+    textAlign: 'center',
   },
   inputContainer: {
     marginBottom: 15,
@@ -464,6 +475,12 @@ const styles = StyleSheet.create({
   },
   loadingIndicator: {
     marginRight: 10,
+  },
+  apiErrorText: {
+    color: 'red',
+    textAlign: 'center',
+    marginTop: 10,
+    fontSize: 14,
   },
 });
 
