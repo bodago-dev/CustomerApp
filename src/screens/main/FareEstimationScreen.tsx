@@ -6,52 +6,156 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
+  TextInput,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import locationService from '../../services/LocationService';
 
 const FareEstimationScreen = ({ route, navigation }) => {
-  const { packageDetails, pickupLocation, dropoffLocation, selectedVehicle } = route.params || {};
-  
+  const { packageDetails = {}, pickupLocation = {}, dropoffLocation = {}, selectedVehicle = {} } = route.params || {};
+
   const [isCalculating, setIsCalculating] = useState(true);
-  const [fareDetails, setFareDetails] = useState(null);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [fareDetails, setFareDetails] = useState({
+    baseFare: 0,
+    distanceFare: 0,
+    packageSizeMultiplier: 1,
+    subtotal: 0,
+    serviceFee: 0,
+    total: 0,
+    distance: 0,
+    estimatedTime: 'Calculating...'
+  });
   const [promoCode, setPromoCode] = useState('');
   const [promoApplied, setPromoApplied] = useState(false);
-  
-  // Calculate fare based on distance, vehicle type, and package details
-  useEffect(() => {
-    // Simulate API call to calculate fare
-    setTimeout(() => {
-      // In a real app, this would be calculated based on actual distance, time, etc.
-      const baseFare = selectedVehicle.price;
-      const distanceFare = 500; // Additional fare based on distance
-      const packageSizeFare = packageDetails.size === 'small' ? 0 : 
-                             packageDetails.size === 'medium' ? 500 : 1000;
-      const packageWeightFare = packageDetails.weight === 'light' ? 0 : 
-                               packageDetails.weight === 'medium' ? 500 : 1000;
+
+  // Base prices per km for each vehicle type (in TZS)
+  const VEHICLE_RATES = {
+    boda: {
+      baseRate: 1000,
+      perKm: 500,
+      minFare: 1000,
+    },
+    bajaji: {
+      baseRate: 2000,
+      perKm: 750,
+      minFare: 2000,
       
-      const subtotal = baseFare + distanceFare + packageSizeFare + packageWeightFare;
-      const serviceFee = Math.round(subtotal * 0.18); // 18% service fee
-      const total = subtotal + serviceFee;
-      
+    },
+    guta: {
+      baseRate: 5000,
+      perKm: 1000,
+      minFare: 5000,
+    }
+  };
+
+  // Size multipliers only
+  const SIZE_MULTIPLIERS = {
+    small: 1.0,
+    medium: 1.2,
+    large: 1.5
+  };
+
+  const calculateDistance = async () => {
+    try {
+      if (!pickupLocation?.coordinates || !dropoffLocation?.coordinates) {
+        console.warn('Missing location coordinates, using default distance');
+        return 5; // Default 5km if coordinates missing
+      }
+
+      const distanceKm = await locationService.calculateDistance(
+        pickupLocation.coordinates,
+        dropoffLocation.coordinates
+      );
+
+      return Number(distanceKm) || 5;
+    } catch (error) {
+      console.error('Error calculating distance:', error);
+      return 5; // Fallback distance
+    }
+  };
+
+  const calculateFare = async () => {
+    setIsCalculating(true);
+
+    try {
+      const distanceKm = await calculateDistance();
+
+      // Get vehicle rates with fallback to boda if not specified
+      const vehicleType = selectedVehicle?.id || 'boda';
+      const vehicleRates = VEHICLE_RATES[vehicleType] || VEHICLE_RATES.boda;
+
+      // Calculate base fare - covers first 3km
+      let baseFare = vehicleRates.baseRate;
+
+      // Calculate distance fare for any distance beyond 3km
+      let distanceFare = 0;
+      if (distanceKm > 3) {
+        const additionalKm = distanceKm - 3;
+        distanceFare = additionalKm * vehicleRates.perKm;
+      }
+
+      // Total fare before size multiplier
+      let totalBeforeMultiplier = baseFare + distanceFare;
+      totalBeforeMultiplier = Math.max(totalBeforeMultiplier, vehicleRates.minFare);
+
+      // Apply package size multiplier only
+      const sizeMultiplier = SIZE_MULTIPLIERS[packageDetails?.size || 'small'] || 1;
+
+      // Calculate subtotal
+      let subtotal = totalBeforeMultiplier * sizeMultiplier;
+      subtotal = Math.round(subtotal / 100) * 100;
+
+      // Calculate service fee (18% of subtotal)
+      const serviceFee = Math.round(subtotal * 0.18);
+
       setFareDetails({
         baseFare,
-        distanceFare,
-        packageSizeFare,
-        packageWeightFare,
+        distanceFare: Math.round(distanceFare * sizeMultiplier),
+        packageSizeMultiplier: sizeMultiplier,
         subtotal,
         serviceFee,
-        total,
-        distance: 5.2, // km
-        estimatedTime: selectedVehicle.estimatedTime,
+        total: subtotal + serviceFee,
+        distance: parseFloat(distanceKm.toFixed(1)),
+        estimatedTime: calculateEstimatedTime(distanceKm, vehicleType),
       });
-      
+
+    } catch (error) {
+      console.error('Error calculating fare:', error);
+      // Fallback to default pricing
+      setFareDetails({
+        baseFare: 3500,
+        distanceFare: 1500,
+        packageSizeMultiplier: 1,
+        subtotal: 5000,
+        serviceFee: 750,
+        total: 5750,
+        distance: 5,
+        estimatedTime: '20-30 min',
+      });
+    } finally {
       setIsCalculating(false);
-    }, 1500);
-  }, []);
+    }
+  };
+
+  const calculateEstimatedTime = (distanceKm, vehicleType) => {
+    const averageSpeeds = {
+      boda: 30,
+      bajaji: 25,
+      guta: 20
+    };
+
+    const baseTime = 10;
+    const travelTime = (distanceKm / averageSpeeds[vehicleType]) * 60;
+    const totalTime = baseTime + travelTime;
+    const minTime = Math.max(10, Math.round(totalTime * 0.8));
+    const maxTime = Math.round(totalTime * 1.2);
+
+    return `${minTime}-${maxTime} min`;
+  };
 
   const handleApplyPromo = () => {
     if (promoCode.toUpperCase() === 'WELCOME50') {
-      // Apply 50% discount
       setFareDetails(prev => ({
         ...prev,
         discount: Math.round(prev.subtotal * 0.5),
@@ -77,6 +181,10 @@ const FareEstimationScreen = ({ route, navigation }) => {
     return `TZS ${price.toLocaleString()}`;
   };
 
+  useEffect(() => {
+    calculateFare();
+  }, []);
+
   if (isCalculating) {
     return (
       <View style={styles.loadingContainer}>
@@ -91,16 +199,14 @@ const FareEstimationScreen = ({ route, navigation }) => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={styles.title}>Fare Estimate</Text>
         <Text style={styles.subtitle}>Review your delivery details and fare</Text>
-        
+
         {/* Route Summary */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Route</Text>
           <View style={styles.routeInfo}>
             <View style={styles.locationRow}>
-              <View style={styles.locationIcon}>
-                <Ionicons name="locate" size={16} color="#0066cc" />
-              </View>
-              <Text style={styles.locationText} numberOfLines={1}>
+              <Ionicons name="locate" size={16} color="#0066cc" />
+              <Text style={styles.locationText}>
                 {pickupLocation?.address || 'Pickup location'}
               </Text>
             </View>
@@ -108,15 +214,13 @@ const FareEstimationScreen = ({ route, navigation }) => {
               <View style={styles.routeDividerLine} />
             </View>
             <View style={styles.locationRow}>
-              <View style={styles.locationIcon}>
-                <Ionicons name="location" size={16} color="#ff6b6b" />
-              </View>
-              <Text style={styles.locationText} numberOfLines={1}>
+              <Ionicons name="location" size={16} color="#ff6b6b" />
+              <Text style={styles.locationText}>
                 {dropoffLocation?.address || 'Dropoff location'}
               </Text>
             </View>
           </View>
-          
+
           <View style={styles.routeDetails}>
             <View style={styles.routeDetailItem}>
               <Ionicons name="speedometer-outline" size={16} color="#666" />
@@ -132,7 +236,7 @@ const FareEstimationScreen = ({ route, navigation }) => {
             </View>
           </View>
         </View>
-        
+
         {/* Vehicle & Package Summary */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Delivery Details</Text>
@@ -140,14 +244,14 @@ const FareEstimationScreen = ({ route, navigation }) => {
             <View style={styles.detailItem}>
               <Text style={styles.detailLabel}>Vehicle Type</Text>
               <View style={styles.detailValueContainer}>
-                <Ionicons 
+                <Ionicons
                   name={
                     selectedVehicle.id === 'boda' ? 'bicycle' :
                     selectedVehicle.id === 'bajaji' ? 'car' :
                     selectedVehicle.id === 'guta' ? 'dump-truck' : 'car'
-                  } 
-                  size={16} 
-                  color="#0066cc" 
+                  }
+                  size={16}
+                  color="#0066cc"
                 />
                 <Text style={styles.detailValue}>{selectedVehicle.name}</Text>
               </View>
@@ -155,27 +259,13 @@ const FareEstimationScreen = ({ route, navigation }) => {
             <View style={styles.detailItem}>
               <Text style={styles.detailLabel}>Package Size</Text>
               <Text style={styles.detailValue}>
-                {packageDetails.size === 'small' ? 'Small' : 
+                {packageDetails.size === 'small' ? 'Small' :
                  packageDetails.size === 'medium' ? 'Medium' : 'Large'}
               </Text>
             </View>
           </View>
-          <View style={styles.detailRow}>
-            <View style={styles.detailItem}>
-              <Text style={styles.detailLabel}>Package Description</Text>
-              <Text style={styles.detailValue}>
-                {packageDetails.description}
-              </Text>
-            </View>
-            <View style={styles.detailItem}>
-              <Text style={styles.detailLabel}>Special Instructions</Text>
-              <Text style={styles.detailValue} numberOfLines={1}>
-                {packageDetails.specialInstructions || 'None'}
-              </Text>
-            </View>
-          </View>
         </View>
-        
+
         {/* Fare Breakdown */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Fare Breakdown</Text>
@@ -184,23 +274,19 @@ const FareEstimationScreen = ({ route, navigation }) => {
             <Text style={styles.fareValue}>{formatPrice(fareDetails.baseFare)}</Text>
           </View>
           <View style={styles.fareItem}>
-            <Text style={styles.fareLabel}>Distance Charge</Text>
+            <Text style={styles.fareLabel}>Distance ({fareDetails.distance} km)</Text>
             <Text style={styles.fareValue}>{formatPrice(fareDetails.distanceFare)}</Text>
           </View>
           <View style={styles.fareItem}>
-            <Text style={styles.fareLabel}>Package Size Charge</Text>
-            <Text style={styles.fareValue}>{formatPrice(fareDetails.packageSizeFare)}</Text>
-          </View>
-          <View style={styles.fareItem}>
-            <Text style={styles.fareLabel}>Package Weight Charge</Text>
-            <Text style={styles.fareValue}>{formatPrice(fareDetails.packageWeightFare)}</Text>
+            <Text style={styles.fareLabel}>Size Multiplier (x{fareDetails.packageSizeMultiplier})</Text>
+            <Text style={styles.fareValue}>Applied</Text>
           </View>
           <View style={styles.divider} />
           <View style={styles.fareItem}>
             <Text style={styles.fareLabel}>Subtotal</Text>
             <Text style={styles.fareValue}>{formatPrice(fareDetails.subtotal)}</Text>
           </View>
-          
+
           {fareDetails.discount && (
             <View style={styles.fareItem}>
               <Text style={[styles.fareLabel, styles.discountText]}>Promo Discount</Text>
@@ -209,9 +295,9 @@ const FareEstimationScreen = ({ route, navigation }) => {
               </Text>
             </View>
           )}
-          
+
           <View style={styles.fareItem}>
-            <Text style={styles.fareLabel}>Service Fee</Text>
+            <Text style={styles.fareLabel}>Service Fee (18%)</Text>
             <Text style={styles.fareValue}>{formatPrice(fareDetails.serviceFee)}</Text>
           </View>
           <View style={styles.divider} />
@@ -220,26 +306,32 @@ const FareEstimationScreen = ({ route, navigation }) => {
             <Text style={styles.totalValue}>{formatPrice(fareDetails.total)}</Text>
           </View>
         </View>
-        
+
         {/* Promo Code */}
-        {!promoApplied && (
+        {/* !promoApplied && (
           <View style={styles.promoContainer}>
-            <TouchableOpacity 
+            <TextInput
+              style={styles.promoInput}
+              placeholder="Enter promo code"
+              value={promoCode}
+              onChangeText={setPromoCode}
+              onSubmitEditing={handleApplyPromo}
+            />
+            <TouchableOpacity
               style={styles.promoButton}
               onPress={handleApplyPromo}>
-              <Ionicons name="pricetag-outline" size={18} color="#0066cc" />
-              <Text style={styles.promoButtonText}>Apply Promo Code: WELCOME50</Text>
+              <Text style={styles.promoButtonText}>Apply</Text>
             </TouchableOpacity>
           </View>
-        )}
-        
-        {/* Payment Method Selection will be in the next screen */}
+        ) */
+    }
       </ScrollView>
-      
+
       <View style={styles.footer}>
         <TouchableOpacity
-          style={styles.continueButton}
-          onPress={handleContinue}>
+          style={[styles.continueButton, isProcessing && styles.disabledButton]}
+          onPress={handleContinue}
+          disabled={isProcessing}>
           <Text style={styles.continueButtonText}>Continue to Payment</Text>
           <Ionicons name="arrow-forward" size={20} color="#fff" />
         </TouchableOpacity>
@@ -266,7 +358,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    paddingBottom: 100, // Extra padding for footer
+    paddingBottom: 100,
   },
   title: {
     fontSize: 24,
@@ -304,16 +396,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginVertical: 5,
   },
-  locationIcon: {
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
   locationText: {
     fontSize: 14,
     color: '#333',
+    marginLeft: 8,
     flex: 1,
   },
   routeDivider: {
@@ -396,24 +482,31 @@ const styles = StyleSheet.create({
     color: '#4caf50',
   },
   promoContainer: {
+    flexDirection: 'row',
     marginBottom: 20,
   },
-  promoButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
-    backgroundColor: '#e6f2ff',
-    borderRadius: 8,
+  promoInput: {
+    flex: 1,
     borderWidth: 1,
-    borderColor: '#cce5ff',
-    borderStyle: 'dashed',
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    marginRight: 10,
+    fontSize: 16,
+  },
+  promoButton: {
+    backgroundColor: '#0066cc',
+    borderRadius: 8,
+    paddingHorizontal: 20,
+    justifyContent: 'center',
   },
   promoButtonText: {
-    color: '#0066cc',
-    fontSize: 14,
-    fontWeight: '500',
-    marginLeft: 8,
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  disabledButton: {
+    backgroundColor: '#99ccff',
   },
   footer: {
     position: 'absolute',

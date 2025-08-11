@@ -14,6 +14,7 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import firestoreService from '../../services/FirestoreService';
+import locationService from '../../services/LocationService';
 
 const { width } = Dimensions.get('window');
 
@@ -30,7 +31,6 @@ const TrackingScreen = ({ route, navigation }) => {
   const [searchingTime, setSearchingTime] = useState(0);
   const mapRef = useRef(null);
 
-  // Initial region for map
   const [mapRegion, setMapRegion] = useState({
     latitude: -6.7924,
     longitude: 39.2083,
@@ -38,7 +38,6 @@ const TrackingScreen = ({ route, navigation }) => {
     longitudeDelta: 0.05,
   });
 
-  // Status transition validation
   const isValidStatusTransition = useCallback((currentStatus, newStatus) => {
     const validTransitions = {
       pending: ['searching'],
@@ -72,37 +71,44 @@ const TrackingScreen = ({ route, navigation }) => {
   const handleDeliveryUpdate = useCallback((updatedDelivery) => {
     if (!updatedDelivery) return;
 
+    const currentStatus = deliveryStatus;
+    const newStatus = updatedDelivery.status === 'pending' ? 'searching' : updatedDelivery.status;
+
     // Validate status transition
-    if (deliveryStatus !== updatedDelivery.status &&
-        !isValidStatusTransition(deliveryStatus, updatedDelivery.status)) {
-      console.warn(`Invalid status transition from ${deliveryStatus} to ${updatedDelivery.status}`);
+    if (currentStatus !== newStatus && !isValidStatusTransition(currentStatus, newStatus)) {
+      console.warn(`Invalid status transition from ${currentStatus} to ${newStatus}`);
       return;
     }
 
-    // Determine display status
-    let displayStatus = updatedDelivery.status;
-    if (updatedDelivery.status === 'pending') {
-      displayStatus = 'searching';
-    }
-
-    setDeliveryStatus(displayStatus);
+    setDeliveryStatus(newStatus);
     setDeliveryData(updatedDelivery);
 
-    // Process timeline updates
-    const timelineEntries = Object.entries(updatedDelivery.timeline || {});
-    const newStatusUpdates = timelineEntries
-      .map(([key, value]) => ({
-        id: key,
+    // Append-only logic — unique on statusKey + timestamp
+    const incomingEntries = Object.entries(updatedDelivery.timeline || {}).map(([key, ts]) => {
+      const dateObj = ts?.toDate?.();
+      return {
+        id: `${key}_${dateObj?.getTime()}`, // ensure uniqueness based on status + timestamp
+        statusKey: key,
         status: getStatusText(key),
-        time: value?.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        description: `Delivery status updated to ${getStatusText(deliveryStatus)}.`,
-      }))
-      .sort((a, b) => new Date(a.time) - new Date(b.time));
+        timeObj: dateObj,
+        description: `Delivery status updated to ${getStatusText(key)}.`
+      };
+    });
 
-    setStatusUpdates(newStatusUpdates);
+    setStatusUpdates(prevUpdates => {
+      const existingIds = new Set(prevUpdates.map(u => u.id));
+      const newItems = incomingEntries.filter(entry => !existingIds.has(entry.id));
+
+      const merged = [...prevUpdates, ...newItems].sort((a, b) => a.timeObj - b.timeObj);
+
+      return merged.map(entry => ({
+        ...entry,
+        time: entry.timeObj?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }));
+    });
 
     // Handle driver assignment
-    if (displayStatus === 'accepted' && updatedDelivery.driverId && !driverInfo) {
+    if (newStatus === 'accepted' && updatedDelivery.driverId && !driverInfo) {
       fetchDriverInfo(updatedDelivery.driverId);
       return firestoreService.subscribeToDriverLocation(
         updatedDelivery.driverId,
@@ -110,8 +116,6 @@ const TrackingScreen = ({ route, navigation }) => {
       );
     }
   }, [deliveryStatus, driverInfo, fetchDriverInfo, isValidStatusTransition]);
-
-// console.log('Driver Info:', delivery);
 
   useEffect(() => {
     if (!deliveryId) {
@@ -127,22 +131,18 @@ const TrackingScreen = ({ route, navigation }) => {
     const fetchAndSubscribeDelivery = async () => {
       setIsLoading(true);
       try {
-        // Initial fetch of delivery data
         const initialDeliveryResult = await firestoreService.getDelivery(deliveryId);
         if (initialDeliveryResult.success && initialDeliveryResult.delivery) {
           const initialData = initialDeliveryResult.delivery;
           setDeliveryData(initialData);
 
-          // Set initial status - show searching if status is pending
           const initialStatus = initialData.status === 'pending' ? 'searching' : initialData.status;
           setDeliveryStatus(initialStatus);
 
-          // Start search timer if we're in searching state
           if (initialStatus === 'searching') {
             searchTimerCleanup = startSearchTimer();
           }
 
-          // Set initial map region
           if (initialData.pickupLocation?.coordinates && initialData.dropoffLocation?.coordinates) {
             const pickupCoords = initialData.pickupLocation.coordinates;
             const dropoffCoords = initialData.dropoffLocation.coordinates;
@@ -154,7 +154,6 @@ const TrackingScreen = ({ route, navigation }) => {
             });
           }
 
-          // Subscribe to real-time delivery updates
           unsubscribeDelivery = firestoreService.subscribeToDeliveryUpdates(
             deliveryId,
             handleDeliveryUpdate
@@ -287,7 +286,6 @@ const TrackingScreen = ({ route, navigation }) => {
         mapType="standard"
         userInterfaceStyle="light"
       >
-        {/* Pickup Marker */}
         {pickupCoords.latitude && pickupCoords.longitude && (
           <Marker
             coordinate={pickupCoords}
@@ -300,7 +298,6 @@ const TrackingScreen = ({ route, navigation }) => {
           </Marker>
         )}
 
-        {/* Dropoff Marker */}
         {dropoffCoords.latitude && dropoffCoords.longitude && (
           <Marker
             coordinate={dropoffCoords}
@@ -313,7 +310,6 @@ const TrackingScreen = ({ route, navigation }) => {
           </Marker>
         )}
 
-        {/* Driver Marker - only show if driver is assigned */}
         {driverLocation && driverLocation.latitude && driverLocation.longitude && (
           <Marker
             coordinate={driverLocation}
@@ -330,7 +326,6 @@ const TrackingScreen = ({ route, navigation }) => {
           </Marker>
         )}
 
-        {/* Route Line */}
         {pickupCoords.latitude && pickupCoords.longitude &&
          dropoffCoords.latitude && dropoffCoords.longitude && (
           <Polyline
@@ -344,7 +339,6 @@ const TrackingScreen = ({ route, navigation }) => {
 
       {/* Status Panel */}
       <View style={styles.statusPanel}>
-        {/* Delivery ID and Status */}
         <View style={styles.deliveryHeader}>
           <View>
             <Text style={styles.deliveryId}>Order #{deliveryData.id?.substring(0, 8) || 'N/A'}</Text>
@@ -370,7 +364,6 @@ const TrackingScreen = ({ route, navigation }) => {
           )}
         </View>
 
-        {/* Driver Search View */}
         {deliveryStatus === 'searching' && (
           <View style={styles.searchingContainer}>
             <ActivityIndicator size="large" color="#0066cc" />
@@ -384,7 +377,6 @@ const TrackingScreen = ({ route, navigation }) => {
           </View>
         )}
 
-        {/* Driver Info - only show if driver is assigned */}
         {driverInfo && deliveryStatus !== 'searching' && deliveryStatus !== 'delivered' && (
           <View style={styles.driverCard}>
             <View style={styles.driverInfo}>
@@ -431,7 +423,7 @@ const TrackingScreen = ({ route, navigation }) => {
               <View key={update.id} style={styles.timelineItem}>
                 <View style={[
                   styles.timelineDot,
-                  { backgroundColor: getStatusColor(update.id) }
+                  { backgroundColor: getStatusColor(update.statusKey) }
                 ]} />
                 {index < statusUpdates.length - 1 && <View style={styles.timelineLine} />}
                 <View style={styles.timelineContent}>

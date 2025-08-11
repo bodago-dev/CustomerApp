@@ -18,8 +18,9 @@ const PackageDetailsScreen = ({ navigation }) => {
   const packageDescriptions = [
     { label: 'Documents', value: 'Documents' },
     { label: 'Food', value: 'Food' },
-    { label: 'Electronics', value: 'Electronics' },
     { label: 'Clothing', value: 'Clothing' },
+    { label: 'Electronics', value: 'Electronics' },
+    { label: 'Automotive Tools & Parts', value: 'Tools' },
     { label: 'Other', value: 'Other' },
   ];
 

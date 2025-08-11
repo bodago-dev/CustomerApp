@@ -128,7 +128,7 @@ const VehicleSelectionScreen = ({ route, navigation }) => {
             <Text style={styles.packageInfoText}>
               {packageDetails?.size === 'small' ? 'Small' : 
                packageDetails?.size === 'medium' ? 'Medium' : 'Large'} package, 
-              {packageDetails?.weight === 'light' ? ' light' : 
+              {packageDetails?.weight === 'small' ? ' light' :
                packageDetails?.weight === 'medium' ? ' medium' : ' heavy'} weight
             </Text>
           </View>
