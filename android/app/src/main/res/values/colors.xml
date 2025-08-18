@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Add this line -->
+    <color name="splashBackground">#000000</color> <!-- Or your preferred splash color -->
+
+    <!-- Other existing colors -->
+</resources>

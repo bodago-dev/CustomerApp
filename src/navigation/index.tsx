@@ -6,6 +6,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { getAuth, onAuthStateChanged } from '@react-native-firebase/auth';
 import { navigationRef } from '../services/NavigationService';
+import { View } from 'react-native';
 import authService from '../services/AuthService';
 
 // Auth Screens
@@ -25,6 +26,9 @@ import DeliveryHistoryScreen from '../screens/main/DeliveryHistoryScreen';
 import DeliveryDetailsScreen from '../screens/main/DeliveryDetailsScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
 import SupportScreen from '../screens/main/SupportScreen';
+
+// Splash Screen
+import SplashScreen from '../screens/SplashScreen';
 
 // Stack navigators
 const AuthStack = createNativeStackNavigator();
@@ -140,74 +144,60 @@ const TabNavigator = () => {
 
 // Main navigator
 const MainNavigator = () => {
-const [isLoading, setIsLoading] = useState(true);
-const [firebaseUser, setFirebaseUser] = useState(null);
-const [userProfile, setUserProfile] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [firebaseUser, setFirebaseUser] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
+  const [splashComplete, setSplashComplete] = useState(false);
 
-useEffect(() => {
-    // Get initial state immediately
+  useEffect(() => {
     const currentUser = authService.getCurrentUser();
     const currentProfile = authService.getCurrentUserProfile();
 
     setFirebaseUser(currentUser);
     setUserProfile(currentProfile);
 
-    // If we have both, we can show the app immediately
     if (currentUser && currentProfile) {
-        setIsLoading(false);
+      setIsLoading(false);
     }
 
-    // Set up listener for changes
     const unsubscribe = authService.addAuthStateListener((user, profile) => {
-        setFirebaseUser(user);
-        setUserProfile(profile);
-        setIsLoading(false);
+      setFirebaseUser(user);
+      setUserProfile(profile);
+      setIsLoading(false);
     });
 
     return unsubscribe;
-}, []);
+  }, []);
 
-// if (isLoading) {
-//     return <SplashScreen />;
-// }
+// Show splash screen until both loading is done AND splash animation completes
+if (!splashComplete) {
+  return <SplashScreen onAnimationComplete={() => setSplashComplete(true)} />;
+}
 
-  console.log('MainNavigator DECISION: isLoading=', isLoading);
-  if (!isLoading) {
-    console.log('MainNavigator DECISION: firebaseUser=', !!firebaseUser, 'userProfile=', !!userProfile);
-    if (firebaseUser && userProfile) {
-      console.log('MainNavigator DECISION: Rendering MainTabs');
-    } else if (firebaseUser && !userProfile) {
-      console.log('MainNavigator DECISION: Rendering ProfileCompletionNavigator');
-    } else {
-      console.log('MainNavigator DECISION: Rendering AuthNavigator');
-    }
-  }
-
-  if (isLoading) {
-    return null; // Or your app loading screen
-  }
+// Show empty view while loading auth state (hidden behind splash screen)
+if (isLoading) {
+  return <View style={{ flex: 1, backgroundColor: '#000000' }} />;
+}
 
   return (
-      <NavigationContainer ref={navigationRef}>
-        <MainStack.Navigator screenOptions={{ headerShown: false }}>
-          {firebaseUser ? (
-            userProfile ? (
-              <MainStack.Screen name="MainTabs" component={TabNavigator} />
-            ) : (
-              <MainStack.Screen
-                name="ProfileCompletion"
-                component={ProfileCompletionNavigator}
-                initialParams={{
-                  phoneNumber: firebaseUser.phoneNumber
-                }}
-              />
-            )
+    <NavigationContainer ref={navigationRef}>
+      <MainStack.Navigator screenOptions={{ headerShown: false }}>
+        {firebaseUser ? (
+          userProfile ? (
+            <MainStack.Screen name="MainTabs" component={TabNavigator} />
           ) : (
-            <MainStack.Screen name="Auth" component={AuthNavigator} />
-          )}
-        </MainStack.Navigator>
-      </NavigationContainer>
-    );
-  };
+            <MainStack.Screen
+              name="ProfileCompletion"
+              component={ProfileCompletionNavigator}
+              initialParams={{ phoneNumber: firebaseUser.phoneNumber }}
+            />
+          )
+        ) : (
+          <MainStack.Screen name="Auth" component={AuthNavigator} />
+        )}
+      </MainStack.Navigator>
+    </NavigationContainer>
+  );
+};
 
 export default MainNavigator;

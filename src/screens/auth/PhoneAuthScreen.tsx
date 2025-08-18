@@ -81,11 +81,11 @@ const PhoneAuthScreen: React.FC<PhoneAuthScreenProps> = ({ navigation }) => {
     },
     logoContainer: {
       alignItems: 'center',
-      marginBottom: 40,
+      marginBottom: 15,
     },
     logo: {
-      width: 150,
-      height: 150,
+      width: 180,
+      height: 180,
     },
     title: {
       fontSize: 24,
@@ -182,7 +182,7 @@ const PhoneAuthScreen: React.FC<PhoneAuthScreenProps> = ({ navigation }) => {
         contentContainerStyle={styles.scrollContainer as StyleProp<ViewStyle>}>
         <View style={styles.logoContainer as StyleProp<ViewStyle>}>
           <Image
-            source={require('../../assets/BodaGo-Logo-4.png')}
+            source={require('../../assets/BodaGo-Logo.png')}
             style={styles.logo as StyleProp<ImageStyle>}
             resizeMode="contain"
           />
