@@ -269,7 +269,6 @@ const HomeScreen = ({ navigation }) => {
         </View>
       )}
 
-      {/* Rest of your HomeScreen content remains the same */}
       {/* Send package button */}
       <TouchableOpacity
         style={styles.sendButton}

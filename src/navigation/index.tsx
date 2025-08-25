@@ -27,9 +27,6 @@ import DeliveryDetailsScreen from '../screens/main/DeliveryDetailsScreen';
 import ProfileScreen from '../screens/main/ProfileScreen';
 import SupportScreen from '../screens/main/SupportScreen';
 
-// Splash Screen
-import SplashScreen from '../screens/SplashScreen';
-
 // Stack navigators
 const AuthStack = createNativeStackNavigator();
 const MainStack = createNativeStackNavigator();
@@ -169,15 +166,6 @@ const MainNavigator = () => {
     return unsubscribe;
   }, []);
 
-// Show splash screen until both loading is done AND splash animation completes
-if (!splashComplete) {
-  return <SplashScreen onAnimationComplete={() => setSplashComplete(true)} />;
-}
-
-// Show empty view while loading auth state (hidden behind splash screen)
-if (isLoading) {
-  return <View style={{ flex: 1, backgroundColor: '#000000' }} />;
-}
 
   return (
     <NavigationContainer ref={navigationRef}>
