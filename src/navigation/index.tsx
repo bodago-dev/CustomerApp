@@ -4,9 +4,8 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import { getAuth, onAuthStateChanged } from '@react-native-firebase/auth';
+import { View, ActivityIndicator, Text } from 'react-native'; // ADD THESE IMPORTS
 import { navigationRef } from '../services/NavigationService';
-import { View } from 'react-native';
 import authService from '../services/AuthService';
 
 // Auth Screens
@@ -32,7 +31,7 @@ const AuthStack = createNativeStackNavigator();
 const MainStack = createNativeStackNavigator();
 const DeliveryStack = createNativeStackNavigator();
 const ProfileStack = createNativeStackNavigator();
-const ProfileCompletionStack = createNativeStackNavigator(); // NEW: Stack for profile completion
+const ProfileCompletionStack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
 // Auth navigator
@@ -46,7 +45,7 @@ const AuthNavigator = () => {
   );
 };
 
-// NEW: Profile completion navigator
+// Profile completion navigator
 const ProfileCompletionNavigator = () => {
   return (
     <ProfileCompletionStack.Navigator screenOptions={{ headerShown: false }}>
@@ -112,73 +111,117 @@ const TabNavigator = () => {
         tabBarInactiveTintColor: 'gray',
       })}
     >
-      <Tab.Screen 
-        name="DeliveryTab" 
-        component={DeliveryNavigator} 
-        options={{ 
+      <Tab.Screen
+        name="DeliveryTab"
+        component={DeliveryNavigator}
+        options={{
           headerShown: false,
           title: 'Delivery'
-        }} 
+        }}
       />
-      <Tab.Screen 
-        name="History" 
-        component={DeliveryHistoryScreen} 
-        options={{ 
+      <Tab.Screen
+        name="History"
+        component={DeliveryHistoryScreen}
+        options={{
           title: 'History'
-        }} 
+        }}
       />
-      <Tab.Screen 
-        name="ProfileTab" 
-        component={ProfileNavigator} 
-        options={{ 
+      <Tab.Screen
+        name="ProfileTab"
+        component={ProfileNavigator}
+        options={{
           headerShown: false,
           title: 'Profile'
-        }} 
+        }}
       />
     </Tab.Navigator>
   );
 };
+
+// Loading screen component
+const LoadingScreen = () => (
+  <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+    <ActivityIndicator size="large" color="#0066cc" />
+    <Text>Loading...</Text>
+  </View>
+);
 
 // Main navigator
 const MainNavigator = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [firebaseUser, setFirebaseUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
-  const [splashComplete, setSplashComplete] = useState(false);
+  const [hasProfile, setHasProfile] = useState<boolean | null>(null);
 
   useEffect(() => {
-    const currentUser = authService.getCurrentUser();
-    const currentProfile = authService.getCurrentUserProfile();
+    const initializeAuth = async () => {
+      const currentUser = authService.getCurrentUser();
+      const currentProfile = authService.getCurrentUserProfile();
 
-    setFirebaseUser(currentUser);
-    setUserProfile(currentProfile);
+      setFirebaseUser(currentUser);
+      setUserProfile(currentProfile);
 
-    if (currentUser && currentProfile) {
+      if (currentUser) {
+        // Check if user has profile
+        try {
+          const profileExists = await authService.hasUserProfile();
+          setHasProfile(profileExists);
+        } catch (error) {
+          console.error('Error checking profile:', error);
+          setHasProfile(false);
+        }
+      } else {
+        setHasProfile(false);
+      }
+
       setIsLoading(false);
-    }
+    };
 
-    const unsubscribe = authService.addAuthStateListener((user, profile) => {
+    initializeAuth();
+
+    const unsubscribe = authService.addAuthStateListener(async (user, profile) => {
       setFirebaseUser(user);
       setUserProfile(profile);
+
+      if (user) {
+        try {
+          const profileExists = await authService.hasUserProfile();
+          setHasProfile(profileExists);
+        } catch (error) {
+          console.error('Error checking profile:', error);
+          setHasProfile(false);
+        }
+      } else {
+        setHasProfile(false);
+      }
+
       setIsLoading(false);
     });
 
     return unsubscribe;
   }, []);
 
+  // Show loading screen while initializing
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
 
   return (
     <NavigationContainer ref={navigationRef}>
       <MainStack.Navigator screenOptions={{ headerShown: false }}>
         {firebaseUser ? (
-          userProfile ? (
+          // Use the hasProfile state to determine navigation
+          hasProfile === true ? (
             <MainStack.Screen name="MainTabs" component={TabNavigator} />
-          ) : (
+          ) : hasProfile === false ? (
             <MainStack.Screen
               name="ProfileCompletion"
               component={ProfileCompletionNavigator}
               initialParams={{ phoneNumber: firebaseUser.phoneNumber }}
             />
+          ) : (
+            // Still loading profile check
+            <MainStack.Screen name="Loading" component={LoadingScreen} />
           )
         ) : (
           <MainStack.Screen name="Auth" component={AuthNavigator} />

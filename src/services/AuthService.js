@@ -1,6 +1,7 @@
 // src/services/AuthService.js
 import { getAuth, onAuthStateChanged, signInWithPhoneNumber, signOut, PhoneAuthProvider } from '@react-native-firebase/auth';
 import { getFirestore, doc, getDoc, setDoc, updateDoc, serverTimestamp } from '@react-native-firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 class AuthService {
     constructor() {
@@ -9,6 +10,7 @@ class AuthService {
         this.userProfile = null;
         this.authStateListeners = [];
         this.isInitializing = true;
+        this.hasProfileChecked = false;
 
         try {
             // Initialize Firebase services
@@ -40,6 +42,8 @@ class AuthService {
             this.isInitializing = false;
         }
     }
+
+
 
     // Notify all listeners with current state
     notifyListeners() {
@@ -116,6 +120,26 @@ class AuthService {
         }
     }
 
+  // Add method to check if user has profile
+  async hasUserProfile() {
+    if (this.hasProfileChecked && this.userProfile) {
+      return true;
+    }
+
+    if (!this.user) {
+      return false;
+    }
+
+    try {
+      const userDoc = await getDoc(doc(this.db, 'users', this.user.uid));
+      this.hasProfileChecked = true;
+      return userDoc.exists();
+    } catch (error) {
+      console.error('Error checking user profile:', error);
+      return false;
+    }
+  }
+
     // Load user profile from Firestore
     async loadUserProfile(uid) {
         try {
@@ -124,11 +148,13 @@ class AuthService {
 
             if (userDoc.exists()) {
                 this.userProfile = userDoc.data();
+                this.hasProfileChecked = true;
                 console.log('AuthService.loadUserProfile: Profile loaded successfully');
                 return this.userProfile;
             } else {
                 console.log('AuthService.loadUserProfile: Profile does not exist for:', uid);
                 this.userProfile = null;
+                this.hasProfileChecked = true;
                 return null;
             }
         } catch (error) {
