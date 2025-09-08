@@ -401,7 +401,8 @@ class FirestoreService {
       const payment = {
         ...paymentData,
         status: 'pending',
-        createdAt: serverTimestamp()
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
       };
 
       const docRef = await addDoc(collection(this.db, 'payments'), payment);
@@ -431,6 +432,125 @@ class FirestoreService {
       console.error('Error updating payment status:', error);
       return { success: false, error: error.message };
     }
+  }
+
+  // Get payment record
+  async getPayment(paymentId) {
+    try {
+      const paymentDoc = await getDoc(doc(this.db, 'payments', paymentId));
+
+      if (paymentDoc.exists()) {
+        return {
+          success: true,
+          payment: { id: paymentDoc.id, ...paymentDoc.data() }
+        };
+      } else {
+        return { success: false, error: 'Payment not found' };
+      }
+    } catch (error) {
+      console.error('Error getting payment:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Get payments by delivery ID
+  async getPaymentsByDeliveryId(deliveryId) {
+    try {
+      const q = query(
+        collection(this.db, 'payments'),
+        where('deliveryId', '==', deliveryId),
+        orderBy('createdAt', 'desc')
+      );
+
+      const querySnapshot = await getDocs(q);
+      const payments = [];
+
+      querySnapshot.forEach(doc => {
+        payments.push({ id: doc.id, ...doc.data() });
+      });
+
+      return { success: true, payments };
+    } catch (error) {
+      console.error('Error getting payments by delivery ID:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Enhanced delivery creation with payment integration
+  async createDeliveryWithPayment(deliveryData, paymentData) {
+    try {
+      // Use batch write to ensure both delivery and payment are created atomically
+      const batch = writeBatch(this.db);
+
+      // 1. Create delivery request (for driver matching)
+      const requestRef = doc(collection(this.db, 'delivery_requests'));
+      const deliveryRequest = {
+        ...deliveryData,
+        status: 'pending',
+        createdAt: serverTimestamp(),
+        expiresAt: new Date(Date.now() + 30000) // 30 seconds
+      };
+      batch.set(requestRef, deliveryRequest);
+
+      // 2. Create delivery document (main delivery record)
+      const deliveryRef = doc(collection(this.db, 'deliveries'));
+      const delivery = {
+        ...deliveryData,
+        requestId: requestRef.id, // Link to the delivery request
+        status: 'pending',
+        createdAt: serverTimestamp(),
+        timeline: {
+          pending: serverTimestamp()
+        }
+      };
+      batch.set(deliveryRef, delivery);
+
+      // 3. Create payment document
+      const paymentRef = doc(collection(this.db, 'payments'));
+      const payment = {
+        ...paymentData,
+        deliveryId: deliveryRef.id,
+        requestId: requestRef.id, // Also link payment to request
+        status: 'pending',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+      batch.set(paymentRef, payment);
+
+      await batch.commit();
+
+      // Add searching status update
+      await this.updateDeliveryStatus(deliveryRef.id, 'searching');
+
+      return {
+        success: true,
+        requestId: requestRef.id,
+        deliveryId: deliveryRef.id,
+        paymentId: paymentRef.id,
+        deliveryRequest: { id: requestRef.id, ...deliveryRequest },
+        delivery: { id: deliveryRef.id, ...delivery },
+        payment: { id: paymentRef.id, ...payment }
+      };
+    } catch (error) {
+      console.error('Error creating delivery with payment:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  // Real-time payment listener
+  subscribeToPaymentUpdates(paymentId, callback) {
+    return onSnapshot(
+      doc(this.db, 'payments', paymentId),
+      (doc) => {
+        if (doc.exists()) {
+          callback({ id: doc.id, ...doc.data() });
+        }
+      },
+      (error) => {
+        console.error('Error in payment subscription:', error);
+        callback(null, error);
+      }
+    );
   }
 
   // Utility Functions

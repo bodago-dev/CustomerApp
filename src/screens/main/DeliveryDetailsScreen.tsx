@@ -21,6 +21,7 @@ const DeliveryDetailsScreen = ({ route, navigation }) => {
   const { deliveryId } = route.params;
   const [delivery, setDelivery] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [paymentDetails, setPaymentDetails] = useState(null);
 
   useEffect(() => {
     const fetchDeliveryDetails = async () => {
@@ -40,6 +41,27 @@ const DeliveryDetailsScreen = ({ route, navigation }) => {
 
     fetchDeliveryDetails();
   }, [deliveryId]);
+
+// Fetch payment information
+useEffect(() => {
+  const fetchPaymentDetails = async () => {
+    if (delivery) {
+      try {
+        const paymentResult = await firestoreService.getPaymentsByDeliveryId(deliveryId);
+        if (paymentResult.success && paymentResult.payments.length > 0) {
+          setPaymentDetails(paymentResult.payments[0]);
+        } else {
+          setPaymentDetails(null); // Set to null if no payment found
+        }
+      } catch (error) {
+        console.error('Error fetching payment details:', error);
+        setPaymentDetails(null); // Set to null on error
+      }
+    }
+  };
+
+  fetchPaymentDetails();
+}, [deliveryId, delivery]);
 
   if (isLoading) {
     return (
@@ -197,11 +219,27 @@ const getStatusColor = (status) => {
           </Text>
         </View>
         <View style={styles.detailRow}>
+          <Text style={styles.detailLabel}>Payment Status</Text>
+          <Text style={[styles.detailValue,
+            {color: paymentDetails?.status === 'paid' ? '#4caf50' :
+                    paymentDetails?.status === 'failed' ? '#f44336' : '#ff9800'}]}>
+            {paymentDetails?.status ? paymentDetails.status.charAt(0).toUpperCase() + paymentDetails.status.slice(1) : 'Pending'}
+          </Text>
+        </View>
+        <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>Total Amount</Text>
           <Text style={styles.detailValue}>
             {formatPrice(delivery.fareDetails?.total || 0)}
           </Text>
         </View>
+        {paymentDetails?.transactionId && (
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Transaction ID</Text>
+            <Text style={styles.detailValue}>
+              {paymentDetails.transactionId}
+            </Text>
+          </View>
+        )}
       </View>
 
       {delivery.rating && (

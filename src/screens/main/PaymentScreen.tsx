@@ -13,6 +13,7 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import AuthService from '../../services/AuthService';
 import FirestoreService from '../../services/FirestoreService';
+import { serverTimestamp } from '@react-native-firebase/firestore';
 
 const PaymentScreen = ({ route, navigation }) => {
   const { packageDetails, pickupLocation, dropoffLocation, selectedVehicle, fareDetails } = route.params || {};
@@ -29,83 +30,16 @@ const PaymentScreen = ({ route, navigation }) => {
   ];
 
  const handlePayment = async () => {
-   if (paymentMethod === 'cash') {
-     setIsProcessing(true);
-     try {
-       const userId = AuthService.getCurrentUser()?.uid;
-       if (!userId) throw new Error('User not authenticated');
-
-       // 1. Create delivery request
-       const requestData = {
-         customerId: userId,
-         packageDetails,
-         pickupLocation,
-         dropoffLocation,
-         selectedVehicle,
-         fareDetails,
-         paymentMethod: 'cash',
-         status: 'pending'
-       };
-
-       const requestResult = await FirestoreService.createDeliveryRequest(requestData);
-
-       console.log('Delivery request created:', requestResult);
-
-       if (!requestResult.success) throw new Error('Failed to create delivery request');
-
-       // 2. Create delivery document
-       const deliveryData = {
-         requestId: requestResult.requestId,
-         customerId: userId,
-         packageDetails,
-         pickupLocation,
-         dropoffLocation,
-         selectedVehicle,
-         fareDetails,
-         paymentMethod: 'cash',
-         status: 'pending',
-       };
-
-       const deliveryResult = await FirestoreService.createDelivery(deliveryData);
-
-       console.log('Delivery document created:', deliveryResult);
-
-       if (!deliveryResult.success) throw new Error('Failed to create delivery');
-
-       navigation.navigate('Tracking', {
-         deliveryId: deliveryResult.deliveryId, // Use the delivery ID, not request ID
-         packageDetails,
-         pickupLocation,
-         dropoffLocation,
-         selectedVehicle,
-         fareDetails,
-         paymentMethod: 'cash',
-       });
-     } catch (error) {
-       console.error('Error:', error);
-       Alert.alert('Error', 'Failed to process your order');
-     } finally {
-       setIsProcessing(false);
-     }
-     return;
-   }
-
-   // Similar changes for mobile payments...
-   // For mobile payments
-   if (!phoneNumber || phoneNumber.length < 9) {
-     Alert.alert('Invalid Phone Number', 'Please enter a valid phone number');
-     return;
-   }
-
    setIsProcessing(true);
 
    try {
      const userId = AuthService.getCurrentUser()?.uid;
      if (!userId) throw new Error('User not authenticated');
 
-     // 1. Create delivery request
-     const requestData = {
+     // Prepare delivery data (for both request and delivery)
+     const deliveryData = {
        customerId: userId,
+       customerPhone: AuthService.getCurrentUser()?.phoneNumber,
        packageDetails,
        pickupLocation,
        dropoffLocation,
@@ -115,56 +49,88 @@ const PaymentScreen = ({ route, navigation }) => {
        status: 'pending'
      };
 
-     const requestResult = await FirestoreService.createDeliveryRequest(requestData);
-     if (!requestResult.success) throw new Error('Failed to create delivery request');
-
-     // 2. Create delivery document
-     const deliveryData = {
-       requestId: requestResult.requestId,
+     // Prepare payment data
+     const paymentData = {
        customerId: userId,
-       packageDetails,
-       pickupLocation,
-       dropoffLocation,
-       selectedVehicle,
-       fareDetails,
+       amount: fareDetails.total,
        paymentMethod,
-       status: 'pending',
+       phoneNumber: paymentMethod !== 'cash' ? phoneNumber : null,
+       currency: 'TZS',
+       description: `Delivery payment for ${packageDetails.description}`,
+       metadata: {
+         packageSize: packageDetails.size,
+         vehicleType: selectedVehicle.id,
+         distance: fareDetails.distance
+       }
      };
 
-     const deliveryResult = await FirestoreService.createDelivery(deliveryData);
-     if (!deliveryResult.success) throw new Error('Failed to create delivery');
+     // Use the enhanced method that creates both delivery and payment
+     const result = await FirestoreService.createDeliveryWithPayment(deliveryData, paymentData);
 
-     // Simulate payment processing
-     setTimeout(() => {
+     if (!result.success) throw new Error('Failed to create delivery and payment');
+
+     console.log('Delivery request, delivery, and payment created:', result);
+
+     if (paymentMethod === 'cash') {
+       // For cash payments, immediately mark payment as paid
+       await FirestoreService.updatePaymentStatus(result.paymentId, 'paid', {
+         paidAt: serverTimestamp()
+       });
+
+       navigation.navigate('Tracking', {
+           deliveryId: result.deliveryId,
+           packageDetails,
+           pickupLocation,
+           dropoffLocation,
+           selectedVehicle,
+           fareDetails,
+           paymentMethod,
+         });
+       } else {
+         // For mobile payments, simulate payment processing
+         setTimeout(async () => {
+           setIsProcessing(false);
+
+           // Update payment status to processing
+           await FirestoreService.updatePaymentStatus(result.paymentId, 'processing', {
+             transactionId: `TXN_${Date.now()}`,
+             processingAt: serverTimestamp()
+           });
+
+           Alert.alert(
+             'Payment Initiated',
+             'Please check your phone for the payment prompt and enter your PIN to complete the payment.',
+             [
+               {
+                 text: 'OK',
+                 onPress: async () => {
+                   // Simulate payment confirmation
+                   await FirestoreService.updatePaymentStatus(result.paymentId, 'paid', {
+                     paidAt: serverTimestamp(),
+                     confirmedAt: serverTimestamp()
+                   });
+
+                   navigation.navigate('Tracking', {
+                     deliveryId: result.deliveryId,
+                     packageDetails,
+                     pickupLocation,
+                     dropoffLocation,
+                     selectedVehicle,
+                     fareDetails,
+                     paymentMethod,
+                   });
+                 },
+               },
+             ]
+           );
+         }, 2000);
+       }
+     } catch (error) {
+       console.error('Error:', error);
        setIsProcessing(false);
-
-       Alert.alert(
-         'Payment Initiated',
-         'Please check your phone for the payment prompt and enter your PIN to complete the payment.',
-         [
-           {
-             text: 'OK',
-             onPress: () => {
-               navigation.navigate('Tracking', {
-                 deliveryId: deliveryResult.deliveryId,
-                 packageDetails,
-                 pickupLocation,
-                 dropoffLocation,
-                 selectedVehicle,
-                 fareDetails,
-                 paymentMethod,
-               });
-             },
-           },
-         ]
-       );
-     }, 2000);
-   } catch (error) {
-     console.error('Error:', error);
-     setIsProcessing(false);
-     Alert.alert('Error', 'Failed to process your order');
-   }
- };
+       Alert.alert('Error', 'Failed to process your order');
+     }
+   };
 
   const formatPrice = (price) => {
     return `TZS ${price.toLocaleString()}`;
