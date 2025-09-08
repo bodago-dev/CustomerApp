@@ -488,7 +488,7 @@ class FirestoreService {
         ...deliveryData,
         status: 'pending',
         createdAt: serverTimestamp(),
-        expiresAt: new Date(Date.now() + 30000) // 30 seconds
+        expiresAt: new Date(Date.now() + 300000) // 300 seconds
       };
       batch.set(requestRef, deliveryRequest);
 
