@@ -65,7 +65,7 @@ const DeliveryHistoryScreen = ({ navigation }) => {
     }
   };
 
-  console.log('Deliveries:', deliveries);
+//   console.log('Deliveries:', deliveries);
 
   const getStatusColor = (status) => {
     switch (status) {

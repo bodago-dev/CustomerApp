@@ -43,8 +43,6 @@ class AuthService {
         }
     }
 
-
-
     // Notify all listeners with current state
     notifyListeners() {
         if (this.isInitializing) {
@@ -318,19 +316,29 @@ class AuthService {
 
     // Format phone number to international format
     formatPhoneNumber(phoneNumber) {
-        // Remove any non-digit characters
-        const cleaned = phoneNumber.replace(/\D/g, '');
+      // Remove any non-digit characters
+      const cleaned = phoneNumber.replace(/\D/g, '');
 
-        // Add Tanzania country code if not present
-        if (cleaned.startsWith('0')) {
-            return '+255' + cleaned.substring(1);
-        } else if (cleaned.startsWith('255')) {
-            return '+' + cleaned;
-        } else if (cleaned.startsWith('+255')) {
-            return cleaned;
-        } else {
-            return '+255' + cleaned;
-        }
+      console.log('Formatting phone number:', cleaned);
+
+      // Handle different input formats
+      if (cleaned.startsWith('0') && cleaned.length === 10) {
+        // Local format: 0712345678 → +255712345678
+        return '+255' + cleaned.substring(1);
+      } else if (cleaned.startsWith('255') && cleaned.length === 12) {
+        // National format: 255712345678 → +255712345678
+        return '+' + cleaned;
+      } else if (cleaned.startsWith('+255') && cleaned.length === 13) {
+        // Already in international format
+        return cleaned;
+      } else if (cleaned.length === 9) {
+        // 9-digit number without prefix: 712345678 → +255712345678
+        return '+255' + cleaned;
+      } else {
+        // Invalid format, but try to handle it
+        console.warn('Unexpected phone number format:', phoneNumber);
+        return '+255' + cleaned.slice(-9); // Take last 9 digits
+      }
     }
 
     // Get user-friendly error message

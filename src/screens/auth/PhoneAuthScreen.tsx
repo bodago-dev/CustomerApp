@@ -14,6 +14,8 @@ import {
   ViewStyle,
   TextStyle,
   ImageStyle,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
 import authService from '../../services/AuthService';
 
@@ -36,12 +38,26 @@ const PhoneAuthScreen: React.FC<PhoneAuthScreenProps> = ({ navigation }) => {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSendOTP = async () => {
-    if (!phoneNumber.trim()) {
+
+    // Dismiss keyboard first
+    Keyboard.dismiss();
+    
+    // Remove all non-digit characters
+    const cleanedPhoneNumber = phoneNumber.replace(/\D/g, '');
+
+    if (!cleanedPhoneNumber.trim()) {
       Alert.alert('Error', 'Please enter your phone number');
       return;
     }
 
-    if (phoneNumber.length !== 9) {
+    // Check if the number starts with 0 and has 10 digits total
+    if (cleanedPhoneNumber.startsWith('0') && cleanedPhoneNumber.length !== 10) {
+      Alert.alert('Error', 'Please enter a valid 10-digit phone number starting with 0');
+      return;
+    }
+
+    // Check if the number doesn't start with 0 and has 9 digits
+    if (!cleanedPhoneNumber.startsWith('0') && cleanedPhoneNumber.length !== 9) {
       Alert.alert('Error', 'Please enter a valid 9-digit phone number');
       return;
     }
@@ -49,12 +65,30 @@ const PhoneAuthScreen: React.FC<PhoneAuthScreenProps> = ({ navigation }) => {
     setIsLoading(true);
 
     try {
-      const fullPhoneNumber = `+255${phoneNumber}`;
+      let fullPhoneNumber;
+
+      // Handle different input formats
+      if (cleanedPhoneNumber.startsWith('0')) {
+        // Convert local format (0712345678) to international (+255712345678)
+        fullPhoneNumber = `+255${cleanedPhoneNumber.substring(1)}`;
+      } else if (cleanedPhoneNumber.startsWith('255')) {
+        // Convert national format (255712345678) to international (+255712345678)
+        fullPhoneNumber = `+${cleanedPhoneNumber}`;
+      } else if (cleanedPhoneNumber.startsWith('+255')) {
+        // Already in international format
+        fullPhoneNumber = cleanedPhoneNumber;
+      } else {
+        // Assume it's a 9-digit number without prefix
+        fullPhoneNumber = `+255${cleanedPhoneNumber}`;
+      }
+
+      console.log('Formatted phone number:', fullPhoneNumber);
+
       const result = await authService.sendOTP(fullPhoneNumber);
 
       if (result.success) {
         navigation.navigate('OtpVerification', {
-          verificationId: result.confirmation.verificationId, // Only pass the verificationId
+          verificationId: result.confirmation.verificationId,
           phoneNumber: fullPhoneNumber
         });
       } else {
@@ -175,11 +209,15 @@ const PhoneAuthScreen: React.FC<PhoneAuthScreenProps> = ({ navigation }) => {
   });
 
   return (
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       style={styles.container as StyleProp<ViewStyle>}>
       <ScrollView
-        contentContainerStyle={styles.scrollContainer as StyleProp<ViewStyle>}>
+        contentContainerStyle={styles.scrollContainer as StyleProp<ViewStyle>}
+        keyboardShouldPersistTaps="handled"
+      >
+
         <View style={styles.logoContainer as StyleProp<ViewStyle>}>
           <Image
             source={require('../../assets/BodaGo-Logo.png')}
@@ -198,15 +236,19 @@ const PhoneAuthScreen: React.FC<PhoneAuthScreenProps> = ({ navigation }) => {
             <Text style={styles.countryCode as StyleProp<TextStyle>}>+255</Text>
             <TextInput
               style={styles.input as StyleProp<TextStyle>}
-              placeholder="712 345 678"
+              placeholder="712 345 678 or 0712 345 678"
               keyboardType="phone-pad"
               value={phoneNumber}
-              onChangeText={setPhoneNumber}
-              maxLength={9}
+              onChangeText={(text) => {
+                // Allow only digits and auto-format as user types
+                const cleaned = text.replace(/\D/g, '');
+                setPhoneNumber(cleaned);
+              }}
+              maxLength={10} // Allow up to 10 digits (for numbers starting with 0)
             />
           </View>
           <Text style={styles.helperText as StyleProp<TextStyle>}>
-            We'll send you a verification code via SMS
+            Enter 9 digits (712345678) or 10 digits starting with 0 (0712345678)
           </Text>
         </View>
 
@@ -240,6 +282,7 @@ const PhoneAuthScreen: React.FC<PhoneAuthScreenProps> = ({ navigation }) => {
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
+    </TouchableWithoutFeedback>
   );
 };
 
