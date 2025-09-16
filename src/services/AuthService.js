@@ -212,7 +212,8 @@ class AuthService {
             console.error('AuthService.verifyOTP: Error verifying OTP:', error);
             return {
                 success: false,
-                error: this.getErrorMessage(error)
+                error: this.getErrorMessage(error),
+                errorCode: error.code
             };
         }
     }
@@ -347,9 +348,9 @@ class AuthService {
             case 'auth/invalid-phone-number':
                 return 'Invalid phone number format';
             case 'auth/invalid-verification-code':
-                return 'Invalid verification code';
+                return 'The verification code is incorrect. Please check and try again.';
             case 'auth/code-expired':
-                return 'Verification code has expired';
+                return 'Verification code has expired. Please request a new one.';
             case 'auth/too-many-requests':
                 return 'Too many requests. Please try again later';
             case 'auth/network-request-failed':

@@ -41,7 +41,7 @@ const PhoneAuthScreen: React.FC<PhoneAuthScreenProps> = ({ navigation }) => {
 
     // Dismiss keyboard first
     Keyboard.dismiss();
-    
+
     // Remove all non-digit characters
     const cleanedPhoneNumber = phoneNumber.replace(/\D/g, '');
 
