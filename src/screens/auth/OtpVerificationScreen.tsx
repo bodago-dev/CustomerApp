@@ -9,6 +9,8 @@ import {
   Platform,
   ScrollView,
   Alert,
+  TouchableWithoutFeedback,
+  Keyboard,
 } from 'react-native';
 import { getAuth } from '@react-native-firebase/auth';
 import authService from '../../services/AuthService';
@@ -138,70 +140,73 @@ const OtpVerificationScreen = ({ route, navigation }) => {
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <Text style={styles.title}>Verification Code</Text>
-        <Text style={styles.subtitle}>
-          Enter the 6-digit code sent to {phoneNumber}
-        </Text>
-
-        <View style={styles.otpContainer}>
-          {otp.map((digit, index) => (
-            <TextInput
-              key={index}
-              ref={inputRefs[index]}
-              style={[
-                styles.otpInput,
-                hasError && styles.errorInput,
-                isVerifying && styles.disabledInput
-              ]}
-              value={digit}
-              onChangeText={(text) => handleOtpChange(text, index)}
-              onKeyPress={(e) => handleKeyPress(e, index)}
-              keyboardType="number-pad"
-              maxLength={1}
-              editable={!isVerifying}
-              selectTextOnFocus={!isVerifying}
-            />
-          ))}
-        </View>
-
-        {hasError && (
-          <Text style={styles.errorText}>
-            Invalid code. Please try again.
-          </Text>
-        )}
-
-        <TouchableOpacity
-          style={[styles.button, (isVerifying) && styles.buttonDisabled]}
-          onPress={handleVerify}
-          disabled={isVerifying}>
-          <Text style={styles.buttonText}>
-            {isVerifying ? 'Verifying...' : 'Verify'}
-          </Text>
-        </TouchableOpacity>
-
-        <View style={styles.resendContainer}>
-          <Text style={styles.resendText}>
-            Didn't receive the code?{' '}
-          </Text>
-          <TouchableOpacity
-            onPress={handleResendOtp}
-            disabled={timer > 0 || isResending}>
-            <Text
-              style={[
-                styles.resendButton,
-                (timer > 0 || isResending) && styles.resendButtonDisabled
-              ]}>
-              {isResending
-                ? 'Sending...'
-                : timer > 0
-                  ? `Resend in ${timer}s`
-                  : 'Resend Code'}
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.container}>
+          <ScrollView contentContainerStyle={styles.scrollContainer}
+           keyboardShouldPersistTaps="handled"
+          >
+            <Text style={styles.title}>Verification Code</Text>
+            <Text style={styles.subtitle}>
+              Enter the 6-digit code sent to {phoneNumber}
             </Text>
-          </TouchableOpacity>
+
+            <View style={styles.otpContainer}>
+              {otp.map((digit, index) => (
+                <TextInput
+                  key={index}
+                  ref={inputRefs[index]}
+                  style={[
+                    styles.otpInput,
+                    hasError && styles.errorInput,
+                    isVerifying && styles.disabledInput
+                  ]}
+                  value={digit}
+                  onChangeText={(text) => handleOtpChange(text, index)}
+                  onKeyPress={(e) => handleKeyPress(e, index)}
+                  keyboardType="number-pad"
+                  maxLength={1}
+                  editable={!isVerifying}
+                  selectTextOnFocus={!isVerifying}
+                />
+              ))}
+            </View>
+
+            {hasError && (
+              <Text style={styles.errorText}>
+                Invalid code. Please try again.
+              </Text>
+            )}
+
+            <TouchableOpacity
+              style={[styles.button, (isVerifying) && styles.buttonDisabled]}
+              onPress={handleVerify}
+              disabled={isVerifying}>
+              <Text style={styles.buttonText}>
+                {isVerifying ? 'Verifying...' : 'Verify'}
+              </Text>
+            </TouchableOpacity>
+
+            <View style={styles.resendContainer}>
+              <Text style={styles.resendText}>
+                Didn't receive the code?{' '}
+              </Text>
+              <TouchableOpacity
+                onPress={handleResendOtp}
+                disabled={timer > 0 || isResending}>
+                <Text
+                  style={[
+                    styles.resendButton,
+                    (timer > 0 || isResending) && styles.resendButtonDisabled
+                  ]}>
+                  {isResending
+                    ? 'Sending...'
+                    : timer > 0
+                      ? `Resend in ${timer}s`
+                      : 'Resend Code'}
+                </Text>
+              </TouchableOpacity>
         </View>
 
         <TouchableOpacity
@@ -213,6 +218,7 @@ const OtpVerificationScreen = ({ route, navigation }) => {
         </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
+  </TouchableWithoutFeedback>
   );
 };
 
@@ -225,6 +231,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     padding: 20,
     justifyContent: 'center',
+    paddingBottom: 20,
   },
   title: {
     fontSize: 24,
