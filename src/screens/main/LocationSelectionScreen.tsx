@@ -42,8 +42,29 @@ const LocationSelectionScreen = ({ route, navigation }) => {
     setApiReady(!!Config.GOOGLE_PLACES_API_KEY);
   }, []);
 
+  // Function to log Google Places API data
+  const logPlaceData = (data: any, details: any, field: string) => {
+    console.log('Google Places API Response:', {
+      field,
+      placeId: data.place_id,
+      mainText: data.structured_formatting?.main_text,
+      secondaryText: data.structured_formatting?.secondary_text,
+      description: data.description,
+      types: data.types,
+      location: details?.geometry?.location,
+      formattedAddress: details?.formatted_address,
+      addressComponents: details?.address_components,
+    });
+  };
+
   const handleLocationSelect = (data, details, field) => {
-    if (!details?.geometry?.location) return;
+    // Log the API response data
+    logPlaceData(data, details, field);
+
+    if (!details?.geometry?.location) {
+      console.log('No geometry location found in details');
+      return;
+    }
 
     const location = {
       id: data.place_id,
@@ -79,6 +100,8 @@ const LocationSelectionScreen = ({ route, navigation }) => {
         `https://maps.googleapis.com/maps/api/geocode/json?latlng=${coordinate.latitude},${coordinate.longitude}&key=${Config.GOOGLE_PLACES_API_KEY}`
       );
       const data = await response.json();
+
+      console.log('Reverse Geocoding Response:', data);
 
       if (data.results?.length > 0) {
         const firstResult = data.results[0];
@@ -122,11 +145,24 @@ const LocationSelectionScreen = ({ route, navigation }) => {
   };
 
   const handleApiError = (error) => {
-    console.log('Full API Error:', JSON.stringify(error, null, 2));
+    console.log('Google Places API Error:', {
+      error: JSON.stringify(error, null, 2),
+      message: error?.message,
+      code: error?.code
+    });
+
     if (error?.message?.includes('argument 7')) {
       console.warn('Google Places API version mismatch detected');
     }
     alert('Location search failed. Please try again.');
+  };
+
+  const handleNoResults = () => {
+    console.log('Google Places API: No results found for search query');
+  };
+
+  const handleApiSuccess = (response) => {
+    console.log('Google Places API Success - Response:', response);
   };
 
   const handleContinue = () => {
@@ -185,7 +221,7 @@ const LocationSelectionScreen = ({ route, navigation }) => {
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>Pickup Location</Text>
             {apiReady ? (
-              // For the pickup location autocomplete
+            <ScrollView>
               <GooglePlacesAutocomplete
                 key="pickup-autocomplete"
                 ref={pickupRef}
@@ -209,6 +245,9 @@ const LocationSelectionScreen = ({ route, navigation }) => {
                 textInputProps={{
                   onFocus: () => setActiveField('pickup'),
                   placeholderTextColor: '#187814',
+                  onChangeText: (text) => {
+                    console.log('Pickup search text:', text);
+                  }
                 }}
                 styles={{
                   textInputContainer: styles.googleTextInputContainer,
@@ -245,11 +284,12 @@ const LocationSelectionScreen = ({ route, navigation }) => {
                   </View>
                 )}
                 onFail={handleApiError}
-                onNotFound={() => console.log('No results found')} // Changed from alert to console.log
+                onNotFound={handleNoResults}
                 suppressDefaultStyles={false}
                 currentLocation={false}
-                predefinedPlaces={[]} // Add this to ensure predefinedPlaces is always defined
+                predefinedPlaces={[]}
               />
+          </ScrollView>
             ) : (
               <Text style={styles.apiErrorText}>Google Places API not configured</Text>
             )}
@@ -259,8 +299,9 @@ const LocationSelectionScreen = ({ route, navigation }) => {
           <View style={styles.inputContainer}>
             <Text style={styles.inputLabel}>Dropoff Location</Text>
             {apiReady ? (
+            <ScrollView>
               <GooglePlacesAutocomplete
-                key="dropoff-autocomplete" // Added key for better re-rendering
+                key="dropoff-autocomplete"
                 ref={dropoffRef}
                 placeholder="Enter dropoff location"
                 returnKeyType={'search'}
@@ -283,6 +324,9 @@ const LocationSelectionScreen = ({ route, navigation }) => {
                 textInputProps={{
                   onFocus: () => setActiveField('dropoff'),
                   placeholderTextColor: '#a10603',
+                  onChangeText: (text) => {
+                    console.log('Dropoff search text:', text);
+                  }
                 }}
                 styles={{
                   textInputContainer: styles.googleTextInputContainer,
@@ -319,10 +363,11 @@ const LocationSelectionScreen = ({ route, navigation }) => {
                   </View>
                 )}
                 onFail={handleApiError}
-                onNotFound={() => alert('No results found for your search')}
+                onNotFound={handleNoResults}
                 suppressDefaultStyles={false}
                 currentLocation={false}
               />
+          </ScrollView>
             ) : (
               <Text style={styles.apiErrorText}>Google Places API not configured</Text>
             )}
@@ -378,6 +423,7 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     marginBottom: 15,
+    flex: 1,
   },
   inputLabel: {
     fontSize: 14,

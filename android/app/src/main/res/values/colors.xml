@@ -1,8 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Add this line -->
-    <color name="white">#FFFFFF</color> <!-- Or your preferred splash color -->
-    <color name="splashBackground">#FFFFFF</color> <!-- Splash screen background color -->
-
+    <color name="splashBackground">#001742</color>
+    <color name="white">#FFFFFF</color>
     <!-- Other existing colors -->
 </resources>

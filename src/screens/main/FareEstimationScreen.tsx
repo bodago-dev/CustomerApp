@@ -52,8 +52,8 @@ const FareEstimationScreen = ({ route, navigation }) => {
   // Size multipliers only
   const SIZE_MULTIPLIERS = {
     small: 1.0,
-    medium: 1.2,
-    large: 1.5
+    medium: 1.5,
+    large: 1.8
   };
 
   const calculateDistance = async () => {
