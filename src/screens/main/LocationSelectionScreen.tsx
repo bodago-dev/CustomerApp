@@ -8,19 +8,17 @@ import {
   ActivityIndicator,
   Platform,
   KeyboardAvoidingView,
-  ScrollView,
+  Modal,
+  FlatList,
+  TextInput,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
-import { GooglePlacesAutocomplete } from 'react-native-google-places-autocomplete';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import Config from 'react-native-config';
 
 const { width, height } = Dimensions.get('window');
 
 const LocationSelectionScreen = ({ route, navigation }) => {
-  const pickupRef = useRef<GooglePlacesAutocomplete>(null);
-  const dropoffRef = useRef<GooglePlacesAutocomplete>(null);
-
   const { packageDetails } = route.params || {};
   const [pickupLocation, setPickupLocation] = useState(null);
   const [dropoffLocation, setDropoffLocation] = useState(null);
@@ -28,6 +26,14 @@ const LocationSelectionScreen = ({ route, navigation }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [apiReady, setApiReady] = useState(false);
+
+  // New states for custom autocomplete
+  const [pickupQuery, setPickupQuery] = useState('');
+  const [dropoffQuery, setDropoffQuery] = useState('');
+  const [pickupSuggestions, setPickupSuggestions] = useState([]);
+  const [dropoffSuggestions, setDropoffSuggestions] = useState([]);
+  const [showPickupSuggestions, setShowPickupSuggestions] = useState(false);
+  const [showDropoffSuggestions, setShowDropoffSuggestions] = useState(false);
 
   // Initial region for Tanzania (centered on Dar es Salaam)
   const [mapRegion, setMapRegion] = useState({
@@ -57,38 +63,124 @@ const LocationSelectionScreen = ({ route, navigation }) => {
     });
   };
 
-  const handleLocationSelect = (data, details, field) => {
-    // Log the API response data
-    logPlaceData(data, details, field);
-
-    if (!details?.geometry?.location) {
-      console.log('No geometry location found in details');
+  // Fetch place predictions
+  const fetchPlacePredictions = async (query: string, field: string) => {
+    if (!query || query.length < 3) {
+      if (field === 'pickup') {
+        setPickupSuggestions([]);
+        setShowPickupSuggestions(false);
+      } else {
+        setDropoffSuggestions([]);
+        setShowDropoffSuggestions(false);
+      }
       return;
     }
 
-    const location = {
-      id: data.place_id,
-      name: data.structured_formatting.main_text,
-      address: data.structured_formatting.secondary_text,
-      coordinates: {
-        latitude: details.geometry.location.lat,
-        longitude: details.geometry.location.lng,
-      },
-      details: details,
-    };
+    try {
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${Config.GOOGLE_PLACES_API_KEY}&components=country:tz&location=${mapRegion.latitude},${mapRegion.longitude}&radius=20000`
+      );
+      const data = await response.json();
 
-    if (field === 'pickup') {
-      setPickupLocation(location);
-    } else {
-      setDropoffLocation(location);
+      console.log('Google Places Autocomplete API Response:', {
+        field,
+        query,
+        status: data.status,
+        predictions: data.predictions
+      });
+
+      if (data.status === 'OK' && data.predictions) {
+        if (field === 'pickup') {
+          setPickupSuggestions(data.predictions);
+          setShowPickupSuggestions(true);
+        } else {
+          setDropoffSuggestions(data.predictions);
+          setShowDropoffSuggestions(true);
+        }
+      } else {
+        console.log('Google Places Autocomplete API Error:', data.status);
+        if (field === 'pickup') {
+          setPickupSuggestions([]);
+          setShowPickupSuggestions(false);
+        } else {
+          setDropoffSuggestions([]);
+          setShowDropoffSuggestions(false);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching place predictions:', error);
+      if (field === 'pickup') {
+        setPickupSuggestions([]);
+        setShowPickupSuggestions(false);
+      } else {
+        setDropoffSuggestions([]);
+        setShowDropoffSuggestions(false);
+      }
     }
+  };
 
-    setMapRegion({
-      latitude: details.geometry.location.lat,
-      longitude: details.geometry.location.lng,
-      latitudeDelta: 0.005, // Closer zoom for selected location
-      longitudeDelta: 0.005, // Closer zoom for selected location
-    });
+  // Get place details
+  const getPlaceDetails = async (placeId: string, field: string) => {
+    try {
+      const response = await fetch(
+        `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${Config.GOOGLE_PLACES_API_KEY}`
+      );
+      const data = await response.json();
+
+      console.log('Google Places Details API Response:', {
+        field,
+        placeId,
+        result: data.result
+      });
+
+      if (data.status === 'OK' && data.result) {
+        const location = {
+          id: data.result.place_id,
+          name: data.result.name,
+          address: data.result.formatted_address,
+          coordinates: {
+            latitude: data.result.geometry.location.lat,
+            longitude: data.result.geometry.location.lng,
+          },
+          details: data.result,
+        };
+
+        if (field === 'pickup') {
+          setPickupLocation(location);
+          setPickupQuery(data.result.formatted_address);
+          setShowPickupSuggestions(false);
+        } else {
+          setDropoffLocation(location);
+          setDropoffQuery(data.result.formatted_address);
+          setShowDropoffSuggestions(false);
+        }
+
+        setMapRegion({
+          latitude: data.result.geometry.location.lat,
+          longitude: data.result.geometry.location.lng,
+          latitudeDelta: 0.005,
+          longitudeDelta: 0.005,
+        });
+
+        // Log the data
+        logPlaceData(
+          {
+            place_id: data.result.place_id,
+            structured_formatting: {
+              main_text: data.result.name,
+              secondary_text: data.result.formatted_address
+            },
+            description: data.result.formatted_address,
+            types: data.result.types
+          },
+          data.result,
+          field
+        );
+      }
+    } catch (error) {
+      console.error('Error fetching place details:', error);
+      alert('Failed to get location details');
+    }
   };
 
   const handleMapPress = async (event) => {
@@ -115,10 +207,10 @@ const LocationSelectionScreen = ({ route, navigation }) => {
 
         if (activeField === 'pickup') {
           setPickupLocation(newLocation);
-          pickupRef.current?.setAddressText(newLocation.address);
+          setPickupQuery(firstResult.formatted_address);
         } else {
           setDropoffLocation(newLocation);
-          dropoffRef.current?.setAddressText(newLocation.address);
+          setDropoffQuery(firstResult.formatted_address);
         }
       } else {
         const newLocation = {
@@ -130,10 +222,10 @@ const LocationSelectionScreen = ({ route, navigation }) => {
 
         if (activeField === 'pickup') {
           setPickupLocation(newLocation);
-          pickupRef.current?.setAddressText(newLocation.address);
+          setPickupQuery(newLocation.address);
         } else {
           setDropoffLocation(newLocation);
-          dropoffRef.current?.setAddressText(newLocation.address);
+          setDropoffQuery(newLocation.address);
         }
       }
     } catch (error) {
@@ -142,27 +234,6 @@ const LocationSelectionScreen = ({ route, navigation }) => {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleApiError = (error) => {
-    console.log('Google Places API Error:', {
-      error: JSON.stringify(error, null, 2),
-      message: error?.message,
-      code: error?.code
-    });
-
-    if (error?.message?.includes('argument 7')) {
-      console.warn('Google Places API version mismatch detected');
-    }
-    alert('Location search failed. Please try again.');
-  };
-
-  const handleNoResults = () => {
-    console.log('Google Places API: No results found for search query');
-  };
-
-  const handleApiSuccess = (response) => {
-    console.log('Google Places API Success - Response:', response);
   };
 
   const handleContinue = () => {
@@ -180,6 +251,28 @@ const LocationSelectionScreen = ({ route, navigation }) => {
       dropoffLocation,
     });
   };
+
+  const renderSuggestionItem = ({ item }, field: string) => (
+    <TouchableOpacity
+      style={styles.suggestionItem}
+      onPress={() => getPlaceDetails(item.place_id, field)}
+    >
+      <Ionicons
+        name="location-outline"
+        size={20}
+        color="#666"
+        style={styles.suggestionIcon}
+      />
+      <View style={styles.suggestionTextContainer}>
+        <Text style={styles.suggestionMainText}>
+          {item.structured_formatting?.main_text || item.description}
+        </Text>
+        <Text style={styles.suggestionSecondaryText}>
+          {item.structured_formatting?.secondary_text}
+        </Text>
+      </View>
+    </TouchableOpacity>
+  );
 
   return (
     <KeyboardAvoidingView
@@ -216,175 +309,120 @@ const LocationSelectionScreen = ({ route, navigation }) => {
       </MapView>
 
       <View style={styles.inputPanel}>
-          <Text style={styles.panelTitle}>Select Locations</Text>
-          {/* Pickup Location */}
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Pickup Location</Text>
-            {apiReady ? (
-            <ScrollView>
-              <GooglePlacesAutocomplete
-                key="pickup-autocomplete"
-                ref={pickupRef}
-                placeholder="Enter pickup location"
-                returnKeyType={'search'}
-                listViewDisplayed="auto"
-                fetchDetails={true}
-                onPress={(data, details = null) => {
-                  handleLocationSelect(data, details, 'pickup');
-                  setActiveField('pickup');
+        <Text style={styles.panelTitle}>Select Locations</Text>
+
+        {/* Pickup Location */}
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>Pickup Location</Text>
+          <View style={styles.inputWrapper}>
+            <Ionicons name="locate" size={20} color="#0066cc" style={styles.inputIcon} />
+            <TextInput
+              style={styles.textInput}
+              placeholder="Enter pickup location"
+              placeholderTextColor="#187814"
+              value={pickupQuery}
+              onChangeText={(text) => {
+                setPickupQuery(text);
+                fetchPlacePredictions(text, 'pickup');
+              }}
+              onFocus={() => {
+                setActiveField('pickup');
+                if (pickupQuery.length >= 3) {
+                  setShowPickupSuggestions(true);
+                }
+              }}
+            />
+            {pickupLocation && (
+              <TouchableOpacity
+                style={styles.clearButton}
+                onPress={() => {
+                  setPickupLocation(null);
+                  setPickupQuery('');
+                  setPickupSuggestions([]);
+                  setShowPickupSuggestions(false);
                 }}
-                query={{
-                  key: Config.GOOGLE_PLACES_API_KEY,
-                  language: 'en',
-                  components: 'country:tz',
-                  types: 'geocode',
-                  location: `${mapRegion.latitude},${mapRegion.longitude}`,
-                  radius: 20000,
-                  strictbounds: true,
-                }}
-                textInputProps={{
-                  onFocus: () => setActiveField('pickup'),
-                  placeholderTextColor: '#187814',
-                  onChangeText: (text) => {
-                    console.log('Pickup search text:', text);
-                  }
-                }}
-                styles={{
-                  textInputContainer: styles.googleTextInputContainer,
-                  textInput: styles.googleInput,
-                  listView: styles.listView,
-                  row: styles.googleRow,
-                  description: styles.googleDescription,
-                  separator: styles.separator,
-                }}
-                enablePoweredByContainer={false}
-                debounce={300}
-                renderLeftButton={() => (
-                  <View style={styles.inputIcon}>
-                    <Ionicons name="locate" size={20} color="#0066cc" />
-                  </View>
-                )}
-                renderRightButton={() => (
-                  <View style={{ flexDirection: 'row' }}>
-                    {isLoading && (
-                      <ActivityIndicator
-                        size="small"
-                        color="#0066cc"
-                        style={styles.loadingIndicator}
-                      />
-                    )}
-                    {pickupLocation && (
-                      <TouchableOpacity
-                        style={styles.clearButton}
-                        onPress={() => setPickupLocation(null)}
-                      >
-                        <Ionicons name="close-circle" size={18} color="#999" />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                )}
-                onFail={handleApiError}
-                onNotFound={handleNoResults}
-                suppressDefaultStyles={false}
-                currentLocation={false}
-                predefinedPlaces={[]}
-              />
-          </ScrollView>
-            ) : (
-              <Text style={styles.apiErrorText}>Google Places API not configured</Text>
+              >
+                <Ionicons name="close-circle" size={18} color="#999" />
+              </TouchableOpacity>
             )}
           </View>
 
-          {/* Dropoff Location */}
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Dropoff Location</Text>
-            {apiReady ? (
-            <ScrollView>
-              <GooglePlacesAutocomplete
-                key="dropoff-autocomplete"
-                ref={dropoffRef}
-                placeholder="Enter dropoff location"
-                returnKeyType={'search'}
-                listViewDisplayed="auto"
-                predefinedPlaces={[]}
-                fetchDetails={true}
-                onPress={(data, details = null) => {
-                  handleLocationSelect(data, details, 'dropoff');
-                  setActiveField('dropoff');
-                }}
-                query={{
-                  key: Config.GOOGLE_PLACES_API_KEY,
-                  language: 'en',
-                  components: 'country:tz',
-                  types: 'geocode',
-                  location: `${mapRegion.latitude},${mapRegion.longitude}`,
-                  radius: 20000,
-                  strictbounds: true,
-                }}
-                textInputProps={{
-                  onFocus: () => setActiveField('dropoff'),
-                  placeholderTextColor: '#a10603',
-                  onChangeText: (text) => {
-                    console.log('Dropoff search text:', text);
-                  }
-                }}
-                styles={{
-                  textInputContainer: styles.googleTextInputContainer,
-                  textInput: styles.googleInput,
-                  listView: styles.listView,
-                  row: styles.googleRow,
-                  description: styles.googleDescription,
-                  separator: styles.separator,
-                }}
-                enablePoweredByContainer={false}
-                debounce={300}
-                renderLeftButton={() => (
-                  <View style={styles.inputIcon}>
-                    <Ionicons name="location" size={20} color="#ff6b6b" />
-                  </View>
-                )}
-                renderRightButton={() => (
-                  <View style={{ flexDirection: 'row' }}>
-                    {isLoading && (
-                      <ActivityIndicator
-                        size="small"
-                        color="#ff6b6b"
-                        style={styles.loadingIndicator}
-                      />
-                    )}
-                    {dropoffLocation && (
-                      <TouchableOpacity
-                        style={styles.clearButton}
-                        onPress={() => setDropoffLocation(null)}
-                      >
-                        <Ionicons name="close-circle" size={18} color="#999" />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                )}
-                onFail={handleApiError}
-                onNotFound={handleNoResults}
-                suppressDefaultStyles={false}
-                currentLocation={false}
+          {/* Pickup Suggestions */}
+          {showPickupSuggestions && pickupSuggestions.length > 0 && (
+            <View style={styles.suggestionsContainer}>
+              <FlatList
+                data={pickupSuggestions}
+                renderItem={(item) => renderSuggestionItem(item, 'pickup')}
+                keyExtractor={(item) => item.place_id}
+                style={styles.suggestionsList}
+                keyboardShouldPersistTaps="handled"
               />
-          </ScrollView>
-            ) : (
-              <Text style={styles.apiErrorText}>Google Places API not configured</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Dropoff Location */}
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>Dropoff Location</Text>
+          <View style={styles.inputWrapper}>
+            <Ionicons name="location" size={20} color="#ff6b6b" style={styles.inputIcon} />
+            <TextInput
+              style={styles.textInput}
+              placeholder="Enter dropoff location"
+              placeholderTextColor="#a10603"
+              value={dropoffQuery}
+              onChangeText={(text) => {
+                setDropoffQuery(text);
+                fetchPlacePredictions(text, 'dropoff');
+              }}
+              onFocus={() => {
+                setActiveField('dropoff');
+                if (dropoffQuery.length >= 3) {
+                  setShowDropoffSuggestions(true);
+                }
+              }}
+            />
+            {dropoffLocation && (
+              <TouchableOpacity
+                style={styles.clearButton}
+                onPress={() => {
+                  setDropoffLocation(null);
+                  setDropoffQuery('');
+                  setDropoffSuggestions([]);
+                  setShowDropoffSuggestions(false);
+                }}
+              >
+                <Ionicons name="close-circle" size={18} color="#999" />
+              </TouchableOpacity>
             )}
           </View>
 
-          {/* Continue Button */}
-          <TouchableOpacity
-            style={[
-              styles.continueButton,
-              (!pickupLocation || !dropoffLocation) && styles.disabledButton,
-            ]}
-            onPress={handleContinue}
-            disabled={!pickupLocation || !dropoffLocation}
-          >
-            <Text style={styles.continueButtonText}>Continue</Text>
-            <Ionicons name="arrow-forward" size={20} color="#fff" />
-          </TouchableOpacity>
+          {/* Dropoff Suggestions */}
+          {showDropoffSuggestions && dropoffSuggestions.length > 0 && (
+            <View style={styles.suggestionsContainer}>
+              <FlatList
+                data={dropoffSuggestions}
+                renderItem={(item) => renderSuggestionItem(item, 'dropoff')}
+                keyExtractor={(item) => item.place_id}
+                style={styles.suggestionsList}
+                keyboardShouldPersistTaps="handled"
+              />
+            </View>
+          )}
+        </View>
+
+        {/* Continue Button */}
+        <TouchableOpacity
+          style={[
+            styles.continueButton,
+            (!pickupLocation || !dropoffLocation) && styles.disabledButton,
+          ]}
+          onPress={handleContinue}
+          disabled={!pickupLocation || !dropoffLocation}
+        >
+          <Text style={styles.continueButtonText}>Continue</Text>
+          <Ionicons name="arrow-forward" size={20} color="#fff" />
+        </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
   );
@@ -423,7 +461,7 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     marginBottom: 15,
-    flex: 1,
+    position: 'relative',
   },
   inputLabel: {
     fontSize: 14,
@@ -431,36 +469,45 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 8,
   },
-  googleTextInputContainer: {
-    borderWidth: 0,
-    paddingHorizontal: 0,
-  },
-  googleInput: {
-    height: 50,
-    fontSize: 16,
-    color: '#333',
-    paddingHorizontal: 45,
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
     borderWidth: 1,
     borderColor: '#e0e0e0',
     borderRadius: 10,
     backgroundColor: '#f5f5f5',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 1,
+    position: 'relative',
   },
-  listView: {
+  textInput: {
+    flex: 1,
+    height: 50,
+    fontSize: 16,
+    color: '#333',
+    paddingHorizontal: 45,
+    paddingRight: 40,
+  },
+  inputIcon: {
+    position: 'absolute',
+    left: 15,
+    zIndex: 1,
+  },
+  clearButton: {
+    position: 'absolute',
+    right: 15,
+    zIndex: 1,
+    padding: 5,
+  },
+  suggestionsContainer: {
     position: 'absolute',
     top: '100%',
     left: 0,
     right: 0,
     backgroundColor: '#fff',
     borderRadius: 10,
-    maxHeight: 200,
-    marginTop: 5,
     borderWidth: 1,
     borderColor: '#e0e0e0',
+    marginTop: 5,
+    maxHeight: 200,
     zIndex: 1000,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
@@ -468,27 +515,31 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 10,
   },
-  googleRow: {
+  suggestionsList: {
+    flex: 1,
+  },
+  suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
   },
-  googleDescription: {
+  suggestionIcon: {
+    marginRight: 10,
+  },
+  suggestionTextContainer: {
+    flex: 1,
+  },
+  suggestionMainText: {
     fontSize: 14,
-    color: '#444',
+    color: '#333',
+    fontWeight: '500',
   },
-  inputIcon: {
-    position: 'absolute',
-    left: 15,
-    top: 15,
-    zIndex: 1,
-  },
-  clearButton: {
-    position: 'absolute',
-    right: 15,
-    top: 15,
-    zIndex: 1,
-    padding: 5,
+  suggestionSecondaryText: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
   },
   continueButton: {
     backgroundColor: '#0066cc',
@@ -514,19 +565,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     marginRight: 10,
-  },
-  separator: {
-    height: 1,
-    backgroundColor: '#e0e0e0',
-  },
-  loadingIndicator: {
-    marginRight: 10,
-  },
-  apiErrorText: {
-    color: 'red',
-    textAlign: 'center',
-    marginTop: 10,
-    fontSize: 14,
   },
 });
 

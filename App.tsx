@@ -1,5 +1,5 @@
 import React from 'react';
-import MainNavigator from './src/navigation'; // Import your MainNavigator
+import MainNavigator from './src/navigation';
 import { View } from 'react-native';
 
 function App(): React.JSX.Element {
