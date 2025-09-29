@@ -11,6 +11,8 @@ import {
   Modal,
   FlatList,
   TextInput,
+  Animated,
+  Keyboard,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -35,6 +37,12 @@ const LocationSelectionScreen = ({ route, navigation }) => {
   const [showPickupSuggestions, setShowPickupSuggestions] = useState(false);
   const [showDropoffSuggestions, setShowDropoffSuggestions] = useState(false);
 
+  // Panel expansion states
+  const [isPanelExpanded, setIsPanelExpanded] = useState(false);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const panelHeight = useRef(new Animated.Value(350)).current;
+  const panelContentOpacity = useRef(new Animated.Value(1)).current;
+
   // Initial region for Tanzania (centered on Dar es Salaam)
   const [mapRegion, setMapRegion] = useState({
     latitude: -6.7924,
@@ -47,6 +55,77 @@ const LocationSelectionScreen = ({ route, navigation }) => {
     console.log('API Key from Config:', Config.GOOGLE_PLACES_API_KEY);
     setApiReady(!!Config.GOOGLE_PLACES_API_KEY);
   }, []);
+
+  // Handle panel expansion/collapse based on location selection
+  useEffect(() => {
+    // Auto-expand panel when user starts typing in either field
+    if ((pickupQuery || dropoffQuery) && !isPanelExpanded) {
+      setIsPanelExpanded(true);
+    }
+
+    // Auto-collapse panel only when both locations are selected
+    if (pickupLocation && dropoffLocation && isPanelExpanded) {
+      const timer = setTimeout(() => {
+        setIsPanelExpanded(false);
+        setIsKeyboardVisible(false);
+      }, 1000); // Delay collapse to show confirmation
+      return () => clearTimeout(timer);
+    }
+  }, [pickupLocation, dropoffLocation, pickupQuery, dropoffQuery]);
+
+  // Handle panel height animation
+  useEffect(() => {
+    const targetHeight = isPanelExpanded ? height * 0.8 : 350;
+    Animated.parallel([
+      Animated.timing(panelHeight, {
+        toValue: targetHeight,
+        duration: 300,
+        useNativeDriver: false,
+      }),
+      Animated.timing(panelContentOpacity, {
+        toValue: isPanelExpanded ? 1 : 1,
+        duration: 300,
+        useNativeDriver: true,
+      })
+    ]).start();
+  }, [isPanelExpanded]);
+
+  // Keyboard listeners
+    useEffect(() => {
+      const keyboardDidShowListener = Keyboard.addListener(
+        Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+        (e) => {
+          setIsKeyboardVisible(true);
+          // Optionally adjust panel height when keyboard appears
+          if (isPanelExpanded) {
+            Animated.timing(panelHeight, {
+              toValue: height * 0.5, // Slightly taller to accommodate keyboard
+              duration: 300,
+              useNativeDriver: false,
+            }).start();
+          }
+        }
+      );
+
+      return () => {
+        keyboardDidShowListener.remove();
+      };
+    }, [isPanelExpanded]);
+
+  // Function to handle input focus
+  const handleInputFocus = (field: string) => {
+    setActiveField(field);
+    if (!isPanelExpanded) {
+      setIsPanelExpanded(true);
+    }
+    setIsKeyboardVisible(true);
+  };
+
+  // Function to handle input blur
+  const handleInputBlur = () => {
+    // Don't collapse automatically - only collapse when both locations are selected
+    setIsKeyboardVisible(false);
+  };
 
   // Function to log Google Places API data
   const logPlaceData = (data: any, details: any, field: string) => {
@@ -275,13 +354,10 @@ const LocationSelectionScreen = ({ route, navigation }) => {
   );
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <View style={styles.container}>
       <MapView
         provider={PROVIDER_GOOGLE}
-        style={styles.map}
+        style={[styles.map, isPanelExpanded && styles.collapsedMap]}
         region={mapRegion}
         onPress={handleMapPress}
         onMapReady={() => setMapLoaded(true)}
@@ -308,123 +384,121 @@ const LocationSelectionScreen = ({ route, navigation }) => {
         )}
       </MapView>
 
-      <View style={styles.inputPanel}>
-        <Text style={styles.panelTitle}>Select Locations</Text>
+      <Animated.View style={[styles.inputPanel, { height: panelHeight }]}>
+        <View style={styles.panelHandle}>
+          <View style={styles.panelHandleBar} />
+        </View>
 
-        {/* Pickup Location */}
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Pickup Location</Text>
-          <View style={styles.inputWrapper}>
-            <Ionicons name="locate" size={20} color="#0066cc" style={styles.inputIcon} />
-            <TextInput
-              style={styles.textInput}
-              placeholder="Enter pickup location"
-              placeholderTextColor="#187814"
-              value={pickupQuery}
-              onChangeText={(text) => {
-                setPickupQuery(text);
-                fetchPlacePredictions(text, 'pickup');
-              }}
-              onFocus={() => {
-                setActiveField('pickup');
-                if (pickupQuery.length >= 3) {
-                  setShowPickupSuggestions(true);
-                }
-              }}
-            />
-            {pickupLocation && (
-              <TouchableOpacity
-                style={styles.clearButton}
-                onPress={() => {
-                  setPickupLocation(null);
-                  setPickupQuery('');
-                  setPickupSuggestions([]);
-                  setShowPickupSuggestions(false);
+        <Animated.View style={[styles.panelContent, { opacity: panelContentOpacity }]}>
+          <Text style={styles.panelTitle}>Your Delivery Route</Text>
+
+          {/* Pickup Location */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Pickup Location</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="locate" size={20} color="#0066cc" style={styles.inputIcon} />
+              <TextInput
+                style={styles.textInput}
+                placeholder="Enter pickup location"
+                placeholderTextColor="#187814"
+                value={pickupQuery}
+                onChangeText={(text) => {
+                  setPickupQuery(text);
+                  fetchPlacePredictions(text, 'pickup');
                 }}
-              >
-                <Ionicons name="close-circle" size={18} color="#999" />
-              </TouchableOpacity>
+                onFocus={() => handleInputFocus('pickup')}
+                onBlur={handleInputBlur}
+              />
+              {pickupLocation && (
+                <TouchableOpacity
+                  style={styles.clearButton}
+                  onPress={() => {
+                    setPickupLocation(null);
+                    setPickupQuery('');
+                    setPickupSuggestions([]);
+                    setShowPickupSuggestions(false);
+                  }}
+                >
+                  <Ionicons name="close-circle" size={18} color="#999" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Pickup Suggestions */}
+            {showPickupSuggestions && pickupSuggestions.length > 0 && (
+              <View style={styles.suggestionsContainer}>
+                <FlatList
+                  data={pickupSuggestions}
+                  renderItem={(item) => renderSuggestionItem(item, 'pickup')}
+                  keyExtractor={(item) => item.place_id}
+                  style={styles.suggestionsList}
+                  keyboardShouldPersistTaps="handled"
+                />
+              </View>
             )}
           </View>
 
-          {/* Pickup Suggestions */}
-          {showPickupSuggestions && pickupSuggestions.length > 0 && (
-            <View style={styles.suggestionsContainer}>
-              <FlatList
-                data={pickupSuggestions}
-                renderItem={(item) => renderSuggestionItem(item, 'pickup')}
-                keyExtractor={(item) => item.place_id}
-                style={styles.suggestionsList}
-                keyboardShouldPersistTaps="handled"
-              />
-            </View>
-          )}
-        </View>
-
-        {/* Dropoff Location */}
-        <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Dropoff Location</Text>
-          <View style={styles.inputWrapper}>
-            <Ionicons name="location" size={20} color="#ff6b6b" style={styles.inputIcon} />
-            <TextInput
-              style={styles.textInput}
-              placeholder="Enter dropoff location"
-              placeholderTextColor="#a10603"
-              value={dropoffQuery}
-              onChangeText={(text) => {
-                setDropoffQuery(text);
-                fetchPlacePredictions(text, 'dropoff');
-              }}
-              onFocus={() => {
-                setActiveField('dropoff');
-                if (dropoffQuery.length >= 3) {
-                  setShowDropoffSuggestions(true);
-                }
-              }}
-            />
-            {dropoffLocation && (
-              <TouchableOpacity
-                style={styles.clearButton}
-                onPress={() => {
-                  setDropoffLocation(null);
-                  setDropoffQuery('');
-                  setDropoffSuggestions([]);
-                  setShowDropoffSuggestions(false);
+          {/* Dropoff Location */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Dropoff Location</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="location" size={20} color="#ff6b6b" style={styles.inputIcon} />
+              <TextInput
+                style={styles.textInput}
+                placeholder="Enter dropoff location"
+                placeholderTextColor="#a10603"
+                value={dropoffQuery}
+                onChangeText={(text) => {
+                  setDropoffQuery(text);
+                  fetchPlacePredictions(text, 'dropoff');
                 }}
-              >
-                <Ionicons name="close-circle" size={18} color="#999" />
-              </TouchableOpacity>
+                onFocus={() => handleInputFocus('dropoff')}
+                onBlur={handleInputBlur}
+              />
+              {dropoffLocation && (
+                <TouchableOpacity
+                  style={styles.clearButton}
+                  onPress={() => {
+                    setDropoffLocation(null);
+                    setDropoffQuery('');
+                    setDropoffSuggestions([]);
+                    setShowDropoffSuggestions(false);
+                  }}
+                >
+                  <Ionicons name="close-circle" size={18} color="#999" />
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* Dropoff Suggestions */}
+            {showDropoffSuggestions && dropoffSuggestions.length > 0 && (
+              <View style={styles.suggestionsContainer}>
+                <FlatList
+                  data={dropoffSuggestions}
+                  renderItem={(item) => renderSuggestionItem(item, 'dropoff')}
+                  keyExtractor={(item) => item.place_id}
+                  style={styles.suggestionsList}
+                  keyboardShouldPersistTaps="handled"
+                />
+              </View>
             )}
           </View>
 
-          {/* Dropoff Suggestions */}
-          {showDropoffSuggestions && dropoffSuggestions.length > 0 && (
-            <View style={styles.suggestionsContainer}>
-              <FlatList
-                data={dropoffSuggestions}
-                renderItem={(item) => renderSuggestionItem(item, 'dropoff')}
-                keyExtractor={(item) => item.place_id}
-                style={styles.suggestionsList}
-                keyboardShouldPersistTaps="handled"
-              />
-            </View>
-          )}
-        </View>
-
-        {/* Continue Button */}
-        <TouchableOpacity
-          style={[
-            styles.continueButton,
-            (!pickupLocation || !dropoffLocation) && styles.disabledButton,
-          ]}
-          onPress={handleContinue}
-          disabled={!pickupLocation || !dropoffLocation}
-        >
-          <Text style={styles.continueButtonText}>Continue</Text>
-          <Ionicons name="arrow-forward" size={20} color="#fff" />
-        </TouchableOpacity>
-      </View>
-    </KeyboardAvoidingView>
+          {/* Continue Button */}
+          <TouchableOpacity
+            style={[
+              styles.continueButton,
+              (!pickupLocation || !dropoffLocation) && styles.disabledButton,
+            ]}
+            onPress={handleContinue}
+            disabled={!pickupLocation || !dropoffLocation}
+          >
+            <Text style={styles.continueButtonText}>Continue</Text>
+            <Ionicons name="arrow-forward" size={20} color="#fff" />
+          </TouchableOpacity>
+        </Animated.View>
+      </Animated.View>
+    </View>
   );
 };
 
@@ -433,8 +507,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
+  keyboardAvoidingView: {
+    flex: 1,
+  },
   map: {
     flex: 1,
+  },
+  collapsedMap: {
+    height: '20%',
   },
   inputPanel: {
     position: 'absolute',
@@ -444,19 +524,33 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 30 : 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
     shadowOpacity: 0.1,
     shadowRadius: 5,
     elevation: 5,
+    overflow: 'hidden',
+  },
+  panelContent: {
+    flex: 1,
+    padding: 20,
+    paddingBottom: Platform.OS === 'ios' ? 30 : 20,
+  },
+  panelHandle: {
+    alignItems: 'center',
+    paddingTop: 8,
+  },
+  panelHandleBar: {
+    width: 40,
+    height: 4,
+    backgroundColor: '#ccc',
+    borderRadius: 2,
   },
   panelTitle: {
     fontSize: 22,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 20,
+    marginBottom: 10,
     textAlign: 'center',
   },
   inputContainer: {
