@@ -32,12 +32,12 @@ const FareEstimationScreen = ({ route, navigation }) => {
   // Base prices per km for each vehicle type (in TZS)
   const VEHICLE_RATES = {
     boda: {
-      baseRate: 1000,
+      baseRate: 2000,
       perKm: 500,
       minFare: 1000,
     },
     bajaji: {
-      baseRate: 2000,
+      baseRate: 3000,
       perKm: 750,
       minFare: 2000,
       

@@ -15,8 +15,9 @@ import Ionicons from 'react-native-vector-icons/Ionicons';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import firestoreService from '../../services/FirestoreService';
 import locationService from '../../services/LocationService';
+import Config from 'react-native-config';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 const TrackingScreen = ({ route, navigation }) => {
   const { deliveryId } = route.params || {};
@@ -29,6 +30,11 @@ const TrackingScreen = ({ route, navigation }) => {
   const [statusUpdates, setStatusUpdates] = useState([]);
   const [estimatedArrival, setEstimatedArrival] = useState('');
   const [searchingTime, setSearchingTime] = useState(0);
+
+  // Enhanced navigation states
+  const [routeCoordinates, setRouteCoordinates] = useState([]);
+  const [driverPath, setDriverPath] = useState([]);
+
   const mapRef = useRef(null);
 
   const [mapRegion, setMapRegion] = useState({
@@ -37,6 +43,72 @@ const TrackingScreen = ({ route, navigation }) => {
     latitudeDelta: 0.05,
     longitudeDelta: 0.05,
   });
+
+  // Polyline decoding function for Google Directions API
+  const decodePolyline = (encoded) => {
+    let points = [];
+    let index = 0, len = encoded.length;
+    let lat = 0, lng = 0;
+
+    while (index < len) {
+      let b, shift = 0, result = 0;
+      do {
+        b = encoded.charCodeAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      let dlat = ((result & 1) ? ~(result >> 1) : (result >> 1));
+      lat += dlat;
+
+      shift = 0;
+      result = 0;
+      do {
+        b = encoded.charCodeAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      let dlng = ((result & 1) ? ~(result >> 1) : (result >> 1));
+      lng += dlng;
+
+      points.push({
+        latitude: lat / 1e5,
+        longitude: lng / 1e5
+      });
+    }
+    return points;
+  };
+
+  // Fetch actual route from Directions API
+  const fetchRoute = async (origin, destination) => {
+    try {
+      if (!Config.GOOGLE_PLACES_API_KEY) {
+        console.warn('Google Maps API key not configured');
+        return;
+      }
+
+      const apiKey = Config.GOOGLE_PLACES_API_KEY;
+      const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${origin.latitude},${origin.longitude}&destination=${destination.latitude},${destination.longitude}&key=${apiKey}&mode=driving`;
+
+      const response = await fetch(url);
+      const data = await response.json();
+
+      if (data.status === 'OK') {
+        const points = decodePolyline(data.routes[0].overview_polyline.points);
+        setRouteCoordinates(points);
+
+        // Fit map to show entire route
+        if (points.length > 0) {
+          const coordinates = [origin, destination, ...points];
+          mapRef.current?.fitToCoordinates(coordinates, {
+            edgePadding: { top: 50, right: 50, bottom: 300, left: 50 },
+            animated: true,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching route:', error);
+    }
+  };
 
   const isValidStatusTransition = useCallback((currentStatus, newStatus) => {
     const validTransitions = {
@@ -87,7 +159,7 @@ const TrackingScreen = ({ route, navigation }) => {
     const incomingEntries = Object.entries(updatedDelivery.timeline || {}).map(([key, ts]) => {
       const dateObj = ts?.toDate?.();
       return {
-        id: `${key}_${dateObj?.getTime()}`, // ensure uniqueness based on status + timestamp
+        id: `${key}_${dateObj?.getTime()}`,
         statusKey: key,
         status: getStatusText(key),
         timeObj: dateObj,
@@ -112,7 +184,13 @@ const TrackingScreen = ({ route, navigation }) => {
       fetchDriverInfo(updatedDelivery.driverId);
       return firestoreService.subscribeToDriverLocation(
         updatedDelivery.driverId,
-        (location) => location && setDriverLocation(location)
+        (location) => {
+          if (location) {
+            setDriverLocation(location);
+            // Update driver path
+            setDriverPath(prev => [...prev, location]);
+          }
+        }
       );
     }
   }, [deliveryStatus, driverInfo, fetchDriverInfo, isValidStatusTransition]);
@@ -146,6 +224,10 @@ const TrackingScreen = ({ route, navigation }) => {
           if (initialData.pickupLocation?.coordinates && initialData.dropoffLocation?.coordinates) {
             const pickupCoords = initialData.pickupLocation.coordinates;
             const dropoffCoords = initialData.dropoffLocation.coordinates;
+
+            // Fetch actual route
+            fetchRoute(pickupCoords, dropoffCoords);
+
             setMapRegion({
               latitude: (pickupCoords.latitude + dropoffCoords.latitude) / 2,
               longitude: (pickupCoords.longitude + dropoffCoords.longitude) / 2,
@@ -186,7 +268,6 @@ const TrackingScreen = ({ route, navigation }) => {
       case 'searching':
         return '#ff9800';
       case 'accepted':
-      case 'arrived_pickup':
       case 'picked_up':
       case 'in_transit':
       case 'arrived_dropoff':
@@ -194,6 +275,7 @@ const TrackingScreen = ({ route, navigation }) => {
       case 'delivered':
         return '#4caf50';
       case 'cancelled':
+          
         return '#f44336';
       default:
         return '#ff9800';
@@ -227,7 +309,7 @@ const TrackingScreen = ({ route, navigation }) => {
   const getVehicleIcon = (vehicleType) => {
     switch (vehicleType) {
       case 'boda':
-        return 'car';
+        return 'bicycle';
       case 'bajaji':
         return 'car';
       case 'guta':
@@ -279,60 +361,87 @@ const TrackingScreen = ({ route, navigation }) => {
     <View style={styles.container}>
       {/* Map View */}
       <MapView
+        ref={mapRef}
         provider={PROVIDER_GOOGLE}
         style={styles.map}
         region={mapRegion}
         onRegionChangeComplete={setMapRegion}
         mapType="standard"
         userInterfaceStyle="light"
+        showsUserLocation={true}
+        showsMyLocationButton={true}
       >
+        {/* Pickup Marker */}
         {pickupCoords.latitude && pickupCoords.longitude && (
           <Marker
             coordinate={pickupCoords}
             title="Pickup"
             description={deliveryData.pickupLocation?.address}
           >
-            <View style={[styles.markerContainer, { backgroundColor: '#e6f2ff' }]}>
-              <Ionicons name="locate" size={16} color="#0066cc" />
+            <View style={[styles.markerContainer, { backgroundColor: '#0066cc' }]}>
+              <Ionicons name="locate" size={16} color="#fff" />
             </View>
           </Marker>
         )}
 
+        {/* Dropoff Marker */}
         {dropoffCoords.latitude && dropoffCoords.longitude && (
           <Marker
             coordinate={dropoffCoords}
             title="Dropoff"
             description={deliveryData.dropoffLocation?.address}
           >
-            <View style={[styles.markerContainer, { backgroundColor: '#ffebee' }]}>
-              <Ionicons name="location" size={16} color="#ff6b6b" />
+            <View style={[styles.markerContainer, { backgroundColor: '#ff6b6b' }]}>
+              <Ionicons name="location" size={16} color="#fff" />
             </View>
           </Marker>
         )}
 
+        {/* Driver Marker with rotation */}
         {driverLocation && driverLocation.latitude && driverLocation.longitude && (
           <Marker
             coordinate={driverLocation}
+            rotation={driverLocation.heading || 0}
+            anchor={{ x: 0.5, y: 0.5 }}
             title={driverInfo?.firstName || 'Driver'}
-            description={`${driverInfo.vehicleInfo?.vehicleType || ''} • ${driverInfo.vehicleInfo?.vehiclePlate || ''}`}
+            description={`${driverInfo?.vehicleInfo?.vehicleType || ''} • ${driverInfo?.vehicleInfo?.vehiclePlate || ''}`}
           >
-            <View style={[styles.markerContainer, { backgroundColor: '#0066cc' }]}>
+            <View style={styles.driverMarker}>
               <Ionicons
                 name={getVehicleIcon(deliveryData.selectedVehicle?.id)}
-                size={16}
+                size={20}
                 color="#fff"
               />
             </View>
           </Marker>
         )}
 
-        {pickupCoords.latitude && pickupCoords.longitude &&
-         dropoffCoords.latitude && dropoffCoords.longitude && (
+        {/* Actual Route Polyline */}
+        {routeCoordinates.length > 0 && (
+          <Polyline
+            coordinates={routeCoordinates}
+            strokeWidth={4}
+            strokeColor="#0066cc"
+            lineDashPattern={[1, 0]}
+          />
+        )}
+
+        {/* Driver's Traveled Path */}
+        {driverPath.length > 1 && (
+          <Polyline
+            coordinates={driverPath}
+            strokeWidth={3}
+            strokeColor="#4CAF50"
+          />
+        )}
+
+        {/* Fallback straight line if no route available */}
+        {routeCoordinates.length === 0 && pickupCoords.latitude && dropoffCoords.latitude && (
           <Polyline
             coordinates={[pickupCoords, dropoffCoords]}
             strokeWidth={3}
             strokeColor="#0066cc"
-            lineDashPattern={[1]}
+            lineDashPattern={[2]}
           />
         )}
       </MapView>
@@ -474,6 +583,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.2,
     shadowRadius: 2,
     elevation: 2,
+  },
+  driverMarker: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#0066cc',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 5,
   },
   statusPanel: {
     flex: 1,
