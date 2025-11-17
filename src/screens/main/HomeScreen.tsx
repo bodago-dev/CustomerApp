@@ -169,7 +169,6 @@ const HomeScreen = ({ navigation }) => {
     );
   }
 
-
   return (
     <ScrollView
       style={styles.container}
@@ -281,7 +280,7 @@ const HomeScreen = ({ navigation }) => {
 
       {/* Recent locations section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Recent Locations</Text>
+        <Text style={styles.sectionTitle}>Recent Deliveries</Text>
         {recentLocations.length > 0 ? (
           recentLocations.map((location) => (
             <TouchableOpacity

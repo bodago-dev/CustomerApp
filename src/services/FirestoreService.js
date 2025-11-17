@@ -251,7 +251,7 @@ class FirestoreService {
       const q = query(
         collection(this.db, 'deliveries'),
         where(field, '==', userId),
-//        orderBy('createdAt', 'desc'),
+        orderBy('createdAt', 'desc'),
         limit(limitCount)
       );
 

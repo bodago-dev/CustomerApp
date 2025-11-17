@@ -1,3 +1,4 @@
+// DeliveryHistoryScreen.tsx - Updated version
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -24,11 +25,8 @@ const DeliveryHistoryScreen = ({ navigation }) => {
     if (currentUser) {
       setUserId(currentUser.uid);
     } else {
-      // Handle case where user is not authenticated (e.g., navigate to login)
       setIsLoading(false);
       Alert.alert('Error', 'User not authenticated. Please log in.');
-      // Optionally navigate to login screen
-      // navigation.navigate('AuthStack');
     }
   }, []);
 
@@ -36,7 +34,7 @@ const DeliveryHistoryScreen = ({ navigation }) => {
     if (userId) {
       fetchDeliveries();
     }
-  }, [userId, activeTab]); // Refetch when userId or activeTab changes
+  }, [userId, activeTab]);
 
   const fetchDeliveries = async () => {
     setIsLoading(true);
@@ -44,6 +42,13 @@ const DeliveryHistoryScreen = ({ navigation }) => {
       const result = await firestoreService.getUserDeliveries(userId, 'customer');
       if (result.success) {
         let fetchedDeliveries = result.deliveries;
+
+        // Sort by createdAt timestamp in descending order (most recent first)
+        fetchedDeliveries.sort((a, b) => {
+          const dateA = a.createdAt?.toDate?.() || new Date(0);
+          const dateB = b.createdAt?.toDate?.() || new Date(0);
+          return dateB.getTime() - dateA.getTime();
+        });
 
         // Filter based on activeTab
         if (activeTab === 'active') {
@@ -53,6 +58,7 @@ const DeliveryHistoryScreen = ({ navigation }) => {
         } else if (activeTab === 'completed') {
           fetchedDeliveries = fetchedDeliveries.filter(delivery => delivery.status === 'delivered');
         }
+        
         setDeliveries(fetchedDeliveries);
       } else {
         Alert.alert('Error', result.error || 'Failed to fetch deliveries');
@@ -64,8 +70,6 @@ const DeliveryHistoryScreen = ({ navigation }) => {
       setIsLoading(false);
     }
   };
-
-//   console.log('Deliveries:', deliveries);
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -109,9 +113,9 @@ const DeliveryHistoryScreen = ({ navigation }) => {
     switch (vehicleType) {
       case 'boda':
         return 'bicycle-outline';
-      case 'bajaji': // Added bajaji
+      case 'bajaji':
         return 'car-outline';
-      case 'guta': // Added guta
+      case 'guta':
         return 'car-sport-outline';
       default:
         return 'cube-outline';
@@ -124,7 +128,6 @@ const DeliveryHistoryScreen = ({ navigation }) => {
 
   const handleDeliveryPress = (delivery) => {
     if (['accepted', 'arrived_pickup', 'picked_up', 'in_transit', 'arrived_dropoff'].includes(delivery.status)) {
-      // Navigate to tracking screen for active deliveries
       navigation.navigate('DeliveryTab', {
         screen: 'Tracking',
         params: {
@@ -132,7 +135,6 @@ const DeliveryHistoryScreen = ({ navigation }) => {
         }
       });
     } else {
-      // Navigate to delivery details screen for completed/cancelled deliveries
       navigation.navigate('DeliveryTab', {
         screen: 'DeliveryDetails',
         params: {
@@ -148,8 +150,10 @@ const DeliveryHistoryScreen = ({ navigation }) => {
       onPress={() => handleDeliveryPress(item)}>
       <View style={styles.deliveryHeader}>
         <View style={styles.deliveryIdContainer}>
-          <Text style={styles.deliveryId}>{item.id}</Text>
-          <Text style={styles.deliveryDate}>{item.createdAt?.toDate().toLocaleDateString()} • {item.createdAt?.toDate().toLocaleTimeString()}</Text>
+          <Text style={styles.deliveryId}>{item.id?.substring(0, 8) || 'N/A'}</Text>
+          <Text style={styles.deliveryDate}>
+            {item.createdAt?.toDate?.().toLocaleDateString() || 'N/A'} • {item.createdAt?.toDate?.().toLocaleTimeString() || 'N/A'}
+          </Text>
         </View>
         <View style={styles.statusContainer}>
           <View
@@ -186,13 +190,13 @@ const DeliveryHistoryScreen = ({ navigation }) => {
 
       <View style={styles.deliveryFooter}>
         <View style={styles.packageInfo}>
-          <Ionicons name={getVehicleIcon(item.selectedVehicle)} size={16} color="#666" />
+          <Ionicons name={getVehicleIcon(item.selectedVehicle?.id)} size={16} color="#666" />
           <Text style={styles.packageInfoText}>
-            {item.selectedVehicle.id === 'boda' ? 'Boda Boda' :
-             item.selectedVehicle.id === 'bajaji' ? 'Bajaji' :
-             item.selectedVehicle.id === 'guta' ? 'Guta' : 'Unknown'} •
-            {item.packageDetails.size === 'small' ? ' Small' :
-             item.packageDetails.size === 'medium' ? ' Medium' : ' Large'} package
+            {item.selectedVehicle?.id === 'boda' ? 'Boda Boda' :
+             item.selectedVehicle?.id === 'bajaji' ? 'Bajaji' :
+             item.selectedVehicle?.id === 'guta' ? 'Guta' : 'Unknown'} •
+            {item.packageDetails?.size === 'small' ? ' Small' :
+             item.packageDetails?.size === 'medium' ? ' Medium' : ' Large'} package
           </Text>
         </View>
 
@@ -282,6 +286,8 @@ const DeliveryHistoryScreen = ({ navigation }) => {
           keyExtractor={item => item.id}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          refreshing={isLoading}
+          onRefresh={fetchDeliveries}
         />
       )}
     </View>
@@ -466,5 +472,3 @@ const styles = StyleSheet.create({
 });
 
 export default DeliveryHistoryScreen;
-
-

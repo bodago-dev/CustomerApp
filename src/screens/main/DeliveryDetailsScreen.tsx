@@ -29,6 +29,7 @@ const DeliveryDetailsScreen = ({ route, navigation }) => {
         const result = await firestoreService.getDelivery(deliveryId);
         if (result.success) {
           setDelivery(result.delivery);
+//           console.log('Delivery details fetched:', result.delivery);
         } else {
           console.error('Failed to fetch delivery details:', result.error);
         }
@@ -169,7 +170,7 @@ const getStatusColor = (status) => {
         <View style={styles.detailRow}>
           <Text style={styles.detailLabel}>Weight</Text>
           <Text style={styles.detailValue}>
-            {delivery.packageDetails?.weight === 'light' ? 'Light' :
+            {delivery.packageDetails?.weight === 'small' ? 'Light' :
              delivery.packageDetails?.weight === 'medium' ? 'Medium' : 'Heavy'}
           </Text>
         </View>
