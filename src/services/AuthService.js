@@ -209,7 +209,7 @@ class AuthService {
                 };
             }
         } catch (error) {
-            console.error('AuthService.verifyOTP: Error verifying OTP:', error);
+//            console.error('AuthService.verifyOTP: Error verifying OTP:', error);
             return {
                 success: false,
                 error: this.getErrorMessage(error),

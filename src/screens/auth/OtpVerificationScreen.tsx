@@ -122,9 +122,9 @@ const OtpVerificationScreen = ({ route, navigation }) => {
           clearOtpAndRefocus();
 
           // Add a small delay to ensure UI updates before showing alert
-          setTimeout(() => {
-            Alert.alert('Invalid Code', result.error || 'The verification code is incorrect. Please try again.');
-          }, 100);
+//           setTimeout(() => {
+//             Alert.alert('Invalid Code', result.error || 'The verification code is incorrect. Please try again.');
+//           }, 100);
      }
     } catch (error: any) {
       // Handle unexpected errors (network issues, etc.)
