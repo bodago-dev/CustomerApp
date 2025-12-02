@@ -119,6 +119,7 @@ const OtpVerificationScreen = ({ route, navigation }) => {
       } else {
           // Handle service-level error (like invalid verification code)
           console.log('Service-level error:', result.error);
+
           clearOtpAndRefocus();
 
           // Add a small delay to ensure UI updates before showing alert
