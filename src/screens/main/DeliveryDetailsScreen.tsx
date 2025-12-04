@@ -223,8 +223,10 @@ const getStatusColor = (status) => {
           <Text style={styles.detailLabel}>Payment Status</Text>
           <Text style={[styles.detailValue,
             {color: paymentDetails?.status === 'paid' ? '#4caf50' :
+                    (delivery.paymentMethod === 'cash' && paymentDetails?.status === 'pending') ? '#ff9800' :
                     paymentDetails?.status === 'failed' ? '#f44336' : '#ff9800'}]}>
-            {paymentDetails?.status ? paymentDetails.status.charAt(0).toUpperCase() + paymentDetails.status.slice(1) : 'Pending'}
+            {delivery.paymentMethod === 'cash' && paymentDetails?.status === 'pending' ? 'Pending Cash Payment' :
+              paymentDetails?.status ? paymentDetails.status.charAt(0).toUpperCase() + paymentDetails.status.slice(1) : 'Pending'}
           </Text>
         </View>
         <View style={styles.detailRow}>

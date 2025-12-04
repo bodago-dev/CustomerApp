@@ -72,8 +72,8 @@ const PaymentScreen = ({ route, navigation }) => {
      console.log('Delivery request, delivery, and payment created:', result);
 
      if (paymentMethod === 'cash') {
-       // For cash payments, immediately mark payment as paid
-       await FirestoreService.updatePaymentStatus(result.paymentId, 'paid', {
+       // For cash payments, mark payment as pending until rider accepts cash payment during delivery
+       await FirestoreService.updatePaymentStatus(result.paymentId, 'pending', {
          paidAt: serverTimestamp()
        });
 
