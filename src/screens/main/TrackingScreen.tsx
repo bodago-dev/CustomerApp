@@ -30,6 +30,7 @@ const TrackingScreen = ({ route, navigation }) => {
   const [statusUpdates, setStatusUpdates] = useState([]);
   const [estimatedArrival, setEstimatedArrival] = useState('');
   const [searchingTime, setSearchingTime] = useState(0);
+  const deliveryStatusRef = useRef(deliveryStatus);
 
   // Enhanced navigation states
   const [routeCoordinates, setRouteCoordinates] = useState([]);
@@ -43,6 +44,10 @@ const TrackingScreen = ({ route, navigation }) => {
     latitudeDelta: 0.05,
     longitudeDelta: 0.05,
   });
+
+  useEffect(() => {
+    deliveryStatusRef.current = deliveryStatus;
+  }, [deliveryStatus]);
 
   // Polyline decoding function for Google Directions API
   const decodePolyline = (encoded) => {
@@ -144,7 +149,7 @@ const TrackingScreen = ({ route, navigation }) => {
   const handleDeliveryUpdate = useCallback((updatedDelivery) => {
     if (!updatedDelivery) return;
 
-    const currentStatus = deliveryStatus;
+    const currentStatus = deliveryStatusRef.current;
     const newStatus = updatedDelivery.status;
 
     // Validate status transition
@@ -190,7 +195,7 @@ const TrackingScreen = ({ route, navigation }) => {
         }
       );
     }
-  }, [deliveryStatus, driverInfo, fetchDriverInfo, isValidStatusTransition]);
+  }, [driverInfo, fetchDriverInfo, isValidStatusTransition]);
 
   useEffect(() => {
     if (!deliveryId) {
@@ -289,6 +294,7 @@ const TrackingScreen = ({ route, navigation }) => {
         return 'Driver Assigned';
       case 'arrived_pickup':
         return 'Driver at Pickup';
+
       case 'in_transit':
         return 'Package In Transit';
       case 'arrived_dropoff':
