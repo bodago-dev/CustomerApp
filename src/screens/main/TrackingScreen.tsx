@@ -112,13 +112,14 @@ const TrackingScreen = ({ route, navigation }) => {
 
   const isValidStatusTransition = useCallback((currentStatus, newStatus) => {
     const validTransitions = {
-      pending: ['searching'],
+      pending: ['searching', 'cancelled'],
       searching: ['accepted', 'cancelled'],
       accepted: ['arrived_pickup', 'cancelled'],
-      arrived_pickup: ['picked_up', 'cancelled'],
-      picked_up: ['in_transit', 'cancelled'],
+      arrived_pickup: ['in_transit', 'cancelled'],
       in_transit: ['arrived_dropoff', 'cancelled'],
-      arrived_dropoff: ['delivered'],
+      arrived_dropoff: ['delivered', 'cancelled'],
+      delivered: [],
+      cancelled: [],
     };
     return validTransitions[currentStatus]?.includes(newStatus) ?? false;
   }, []);
@@ -144,7 +145,7 @@ const TrackingScreen = ({ route, navigation }) => {
     if (!updatedDelivery) return;
 
     const currentStatus = deliveryStatus;
-    const newStatus = updatedDelivery.status === 'pending' ? 'searching' : updatedDelivery.status;
+    const newStatus = updatedDelivery.status;
 
     // Validate status transition
     if (currentStatus !== newStatus && !isValidStatusTransition(currentStatus, newStatus)) {
@@ -155,29 +156,25 @@ const TrackingScreen = ({ route, navigation }) => {
     setDeliveryStatus(newStatus);
     setDeliveryData(updatedDelivery);
 
-    // Append-only logic — unique on statusKey + timestamp
-    const incomingEntries = Object.entries(updatedDelivery.timeline || {}).map(([key, ts]) => {
-      const dateObj = ts?.toDate?.();
-      return {
-        id: `${key}_${dateObj?.getTime()}`,
-        statusKey: key,
-        status: getStatusText(key),
-        timeObj: dateObj,
-        description: `Delivery status updated to ${getStatusText(key)}.`
-      };
-    });
+    // Re-generate all status updates from the timeline on every update
+    const allEntries = Object.entries(updatedDelivery.timeline || {})
+      .map(([key, ts]) => {
+        const dateObj = ts?.toDate?.();
+        return {
+          id: `${key}_${dateObj?.getTime()}`,
+          statusKey: key,
+          status: getStatusText(key),
+          timeObj: dateObj,
+          description: `Delivery status updated to ${getStatusText(key)}.`
+        };
+      })
+      .filter(entry => entry.timeObj) // Filter out entries without a valid timestamp
+      .sort((a, b) => a.timeObj.getTime() - b.timeObj.getTime());
 
-    setStatusUpdates(prevUpdates => {
-      const existingIds = new Set(prevUpdates.map(u => u.id));
-      const newItems = incomingEntries.filter(entry => !existingIds.has(entry.id));
-
-      const merged = [...prevUpdates, ...newItems].sort((a, b) => a.timeObj - b.timeObj);
-
-      return merged.map(entry => ({
-        ...entry,
-        time: entry.timeObj?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      }));
-    });
+    setStatusUpdates(allEntries.map(entry => ({
+      ...entry,
+      time: entry.timeObj?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    })));
 
     // Handle driver assignment
     if (newStatus === 'accepted' && updatedDelivery.driverId && !driverInfo) {
@@ -214,7 +211,7 @@ const TrackingScreen = ({ route, navigation }) => {
           const initialData = initialDeliveryResult.delivery;
           setDeliveryData(initialData);
 
-          const initialStatus = initialData.status === 'pending' ? 'searching' : initialData.status;
+          const initialStatus = initialData.status;
           setDeliveryStatus(initialStatus);
 
           if (initialStatus === 'searching') {
@@ -268,14 +265,14 @@ const TrackingScreen = ({ route, navigation }) => {
       case 'searching':
         return '#ff9800';
       case 'accepted':
-      case 'picked_up':
+      case 'arrived_pickup':
       case 'in_transit':
       case 'arrived_dropoff':
         return '#2196f3';
       case 'delivered':
         return '#4caf50';
       case 'cancelled':
-          
+
         return '#f44336';
       default:
         return '#ff9800';
@@ -285,14 +282,13 @@ const TrackingScreen = ({ route, navigation }) => {
   const getStatusText = (status) => {
     switch (status) {
       case 'pending':
+        return 'Order Placed';
       case 'searching':
         return 'Looking for a driver';
       case 'accepted':
         return 'Driver Assigned';
       case 'arrived_pickup':
         return 'Driver at Pickup';
-      case 'picked_up':
-        return 'Package Picked Up';
       case 'in_transit':
         return 'Package In Transit';
       case 'arrived_dropoff':
@@ -302,7 +298,7 @@ const TrackingScreen = ({ route, navigation }) => {
       case 'cancelled':
         return 'Cancelled';
       default:
-        return 'Unknown Status';
+        return status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ');
     }
   };
 
