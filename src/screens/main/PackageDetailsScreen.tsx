@@ -6,6 +6,8 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Picker } from '@react-native-picker/picker';
@@ -70,81 +72,97 @@ const PackageDetailsScreen = ({ navigation }) => {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.title}>Package Details</Text>
-        <Text style={styles.subtitle}>Tell us about your package</Text>
+    <KeyboardAvoidingView
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+    >
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.content}>
+          <Text style={styles.title}>Package Details</Text>
+          <Text style={styles.subtitle}>Tell us about your package</Text>
 
-        {/* Package Description */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Package Type</Text>
-          <View style={styles.dropdownContainer}>
-            <Picker
-              selectedValue={packageDescription}
-              onValueChange={(itemValue) => setPackageDescription(itemValue)}
-              style={styles.dropdown}
-              dropdownIconColor="#666"
-            >
-              <Picker.Item label="Select Package Type..." value="" />
-              {packageDescriptions.map((item) => (
-                <Picker.Item key={item.value} label={item.label} value={item.value} />
-              ))}
-            </Picker>
+          {/* Package Description */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Package Type</Text>
+            <View style={styles.dropdownContainer}>
+              <Picker
+                selectedValue={packageDescription}
+                onValueChange={(itemValue) => setPackageDescription(itemValue)}
+                style={styles.dropdown}
+                dropdownIconColor="#666"
+              >
+                <Picker.Item label="Select Package Type..." value="" />
+                {packageDescriptions.map((item) => (
+                  <Picker.Item key={item.value} label={item.label} value={item.value} />
+                ))}
+              </Picker>
+            </View>
           </View>
-        </View>
 
-        {/* Package Size Selection */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Package Size</Text>
-          <View style={styles.optionsContainer}>
-            {packageSizes.map((size) => (
-              <TouchableOpacity
-                key={size.id}
-                style={[
-                  styles.optionCard,
-                  packageSize === size.id && styles.selectedOption,
-                ]}
-                onPress={() => setPackageSize(size.id)}>
-                <Ionicons
-                  name={size.icon}
-                  size={24}
-                  color={ size.color }
-                />
-                <Text
+          {/* Package Size Selection */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Package Size</Text>
+            <View style={styles.optionsContainer}>
+              {packageSizes.map((size) => (
+                <TouchableOpacity
+                  key={size.id}
                   style={[
-                    styles.optionLabel,
-                    packageSize === size.id && styles.selectedOptionText,
-                  ]}>
-                  {size.label}
-                </Text>
-                <Text style={styles.optionDescription}>{size.description}</Text>
-              </TouchableOpacity>
-            ))}
+                    styles.optionCard,
+                    packageSize === size.id && styles.selectedOption,
+                  ]}
+                  onPress={() => setPackageSize(size.id)}>
+                  <Ionicons
+                    name={size.icon}
+                    size={24}
+                    color={ size.color }
+                  />
+                  <Text
+                    style={[
+                      styles.optionLabel,
+                      packageSize === size.id && styles.selectedOptionText,
+                    ]}>
+                    {size.label}
+                  </Text>
+                  <Text style={styles.optionDescription}>{size.description}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </View>
-        </View>
 
-        {/* Special Instructions */}
-        <View style={styles.inputGroup}>
-          <Text style={styles.label}>Special Instructions (Optional)</Text>
-          <TextInput
-            style={[styles.textInput, styles.textArea]}
-            placeholder="Any special handling instructions?"
-            value={specialInstructions}
-            onChangeText={setSpecialInstructions}
-            multiline
-            numberOfLines={4}
-            textAlignVertical="top"
-            maxLength={200}
-          />
-        </View>
+          {/* Special Instructions */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Special Instructions (Optional)</Text>
+            <TextInput
+              style={[styles.textInput, styles.textArea]}
+              placeholder="Any special handling instructions?"
+              value={specialInstructions}
+              onChangeText={setSpecialInstructions}
+              multiline
+              numberOfLines={4}
+              textAlignVertical="top"
+              maxLength={300}
+              returnKeyType="done"
+              blurOnSubmit={true}
+            />
+            <Text style={styles.charCount}>
+              {specialInstructions.length}/300 characters
+            </Text>
+          </View>
 
-        {/* Continue Button */}
-        <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
-          <Text style={styles.continueButtonText}>Continue</Text>
-          <Ionicons name="arrow-forward" size={20} color="#fff" />
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+          {/* Continue Button */}
+          <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
+            <Text style={styles.continueButtonText}>Continue</Text>
+            <Ionicons name="arrow-forward" size={20} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 };
 
@@ -153,8 +171,15 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
   content: {
     padding: 20,
+    paddingBottom: 40, // Extra padding for better scrolling with keyboard
   },
   title: {
     fontSize: 24,
@@ -168,7 +193,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   inputGroup: {
-    marginBottom: 24,
+    marginBottom: 10,
   },
   label: {
     fontSize: 16,
@@ -183,6 +208,7 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 16,
     color: '#333',
+    backgroundColor: '#fff',
   },
   dropdownContainer: {
     borderWidth: 1,
@@ -197,8 +223,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   textArea: {
-    height: 100,
+    height: 100, // Increased height
     textAlignVertical: 'top',
+    minHeight: 80, // Ensure minimum height
+  },
+  charCount: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'right',
+    marginTop: 4,
   },
   optionsContainer: {
     flexDirection: 'row',
@@ -213,6 +246,7 @@ const styles = StyleSheet.create({
     padding: 12,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 10,
   },
   selectedOption: {
     borderColor: '#0066cc',
@@ -239,8 +273,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
-    marginTop: 10,
+    paddingVertical: 16,
+    marginTop: 20,
+    marginBottom: 20, // Extra margin for better visibility
   },
   continueButtonText: {
     color: '#fff',
