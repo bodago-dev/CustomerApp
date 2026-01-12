@@ -3,14 +3,13 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
   TextInput,
-  KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import { Picker } from '@react-native-picker/picker';
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 
 const PackageDetailsScreen = ({ navigation }) => {
   const [packageDescription, setPackageDescription] = useState('');
@@ -32,21 +31,21 @@ const PackageDetailsScreen = ({ navigation }) => {
       label: 'Small',
       description: 'Up to 25kg',
       icon: 'cube-outline',
-      color: '#0722B8'
+      color: '#0722B8',
     },
     {
       id: 'medium',
       label: 'Medium',
       description: '25kg to 75kg',
       icon: 'cube',
-      color: '#059936'
+      color: '#059936',
     },
     {
       id: 'large',
       label: 'Large',
       description: '75kg and above',
       icon: 'apps-sharp',
-      color: '#E81005'
+      color: '#E81005',
     },
   ];
 
@@ -72,97 +71,96 @@ const PackageDetailsScreen = ({ navigation }) => {
   };
 
   return (
-    <KeyboardAvoidingView
+    <KeyboardAwareScrollView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      contentContainerStyle={styles.scrollContent}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      enableOnAndroid={true}           // Important for Android
+      extraScrollHeight={80}           // Fine-tune if needed (extra space above keyboard)
+      extraHeight={120}                // Helps with multiline inputs
+      resetScrollToCoords={{ x: 0, y: 0 }}
     >
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.content}>
-          <Text style={styles.title}>Package Details</Text>
-          <Text style={styles.subtitle}>Tell us about your package</Text>
+      <View style={styles.content}>
+        <Text style={styles.title}>Package Details</Text>
+        <Text style={styles.subtitle}>Tell us about your package</Text>
 
-          {/* Package Description */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Package Type</Text>
-            <View style={styles.dropdownContainer}>
-              <Picker
-                selectedValue={packageDescription}
-                onValueChange={(itemValue) => setPackageDescription(itemValue)}
-                style={styles.dropdown}
-                dropdownIconColor="#666"
-              >
-                <Picker.Item label="Select Package Type..." value="" />
-                {packageDescriptions.map((item) => (
-                  <Picker.Item key={item.value} label={item.label} value={item.value} />
-                ))}
-              </Picker>
-            </View>
-          </View>
-
-          {/* Package Size Selection */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Package Size</Text>
-            <View style={styles.optionsContainer}>
-              {packageSizes.map((size) => (
-                <TouchableOpacity
-                  key={size.id}
-                  style={[
-                    styles.optionCard,
-                    packageSize === size.id && styles.selectedOption,
-                  ]}
-                  onPress={() => setPackageSize(size.id)}>
-                  <Ionicons
-                    name={size.icon}
-                    size={24}
-                    color={ size.color }
-                  />
-                  <Text
-                    style={[
-                      styles.optionLabel,
-                      packageSize === size.id && styles.selectedOptionText,
-                    ]}>
-                    {size.label}
-                  </Text>
-                  <Text style={styles.optionDescription}>{size.description}</Text>
-                </TouchableOpacity>
+        {/* Package Description */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Package Type</Text>
+          <View style={styles.dropdownContainer}>
+            <Picker
+              selectedValue={packageDescription}
+              onValueChange={(itemValue) => setPackageDescription(itemValue)}
+              style={styles.dropdown}
+              dropdownIconColor="#666"
+            >
+              <Picker.Item label="Select Package Type..." value="" />
+              {packageDescriptions.map((item) => (
+                <Picker.Item key={item.value} label={item.label} value={item.value} />
               ))}
-            </View>
+            </Picker>
           </View>
-
-          {/* Special Instructions */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Special Instructions (Optional)</Text>
-            <TextInput
-              style={[styles.textInput, styles.textArea]}
-              placeholder="Any special handling instructions?"
-              value={specialInstructions}
-              onChangeText={setSpecialInstructions}
-              multiline
-              numberOfLines={4}
-              textAlignVertical="top"
-              maxLength={300}
-              returnKeyType="done"
-              blurOnSubmit={true}
-            />
-            <Text style={styles.charCount}>
-              {specialInstructions.length}/300 characters
-            </Text>
-          </View>
-
-          {/* Continue Button */}
-          <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
-            <Text style={styles.continueButtonText}>Continue</Text>
-            <Ionicons name="arrow-forward" size={20} color="#fff" />
-          </TouchableOpacity>
         </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+        {/* Package Size Selection */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Package Size</Text>
+          <View style={styles.optionsContainer}>
+            {packageSizes.map((size) => (
+              <TouchableOpacity
+                key={size.id}
+                style={[
+                  styles.optionCard,
+                  packageSize === size.id && styles.selectedOption,
+                ]}
+                onPress={() => setPackageSize(size.id)}
+              >
+                <Ionicons name={size.icon} size={24} color={size.color} />
+                <Text
+                  style={[
+                    styles.optionLabel,
+                    packageSize === size.id && styles.selectedOptionText,
+                  ]}
+                >
+                  {size.label}
+                </Text>
+                <Text style={styles.optionDescription}>{size.description}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Special Instructions */}
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Special Instructions (Optional)</Text>
+          <TextInput
+            style={[styles.textInput, styles.textArea]}
+            placeholder="Any special handling instructions?"
+            value={specialInstructions}
+            onChangeText={setSpecialInstructions}
+            multiline
+            numberOfLines={4}
+            textAlignVertical="top"
+            maxLength={300}
+            returnKeyType="done"
+            blurOnSubmit={true}
+          />
+          <Text style={styles.charCount}>
+            {specialInstructions.length}/300 characters
+          </Text>
+        </View>
+
+        {/* Continue Button */}
+        <TouchableOpacity style={styles.continueButton} onPress={handleContinue}>
+          <Text style={styles.continueButtonText}>Continue</Text>
+          <Ionicons name="arrow-forward" size={20} color="#fff" />
+        </TouchableOpacity>
+
+        {/* Extra bottom padding */}
+        <View style={{ height: 60 }} />
+      </View>
+    </KeyboardAwareScrollView>
   );
 };
 
@@ -171,15 +169,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#fff',
   },
-  scrollView: {
-    flex: 1,
-  },
   scrollContent: {
     flexGrow: 1,
   },
   content: {
-    padding: 20,
-    paddingBottom: 40, // Extra padding for better scrolling with keyboard
+    padding: 25,
+    paddingBottom: 150,
   },
   title: {
     fontSize: 24,
@@ -193,7 +188,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   inputGroup: {
-    marginBottom: 10,
+    marginBottom: 5,
   },
   label: {
     fontSize: 16,
@@ -223,9 +218,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   textArea: {
-    height: 100, // Increased height
+    minHeight: 80,
+    maxHeight: 180,
     textAlignVertical: 'top',
-    minHeight: 80, // Ensure minimum height
   },
   charCount: {
     fontSize: 12,
@@ -274,8 +269,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
-    marginTop: 20,
-    marginBottom: 20, // Extra margin for better visibility
+    marginTop: 5,
   },
   continueButtonText: {
     color: '#fff',

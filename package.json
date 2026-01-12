@@ -26,6 +26,7 @@
     "react-native-geolocation-service": "^5.3.1",
     "react-native-get-random-values": "^1.11.0",
     "react-native-google-places-autocomplete": "^2.5.7",
+    "react-native-keyboard-aware-scroll-view": "^0.9.5",
     "react-native-maps": "^1.24.3",
     "react-native-permissions": "^5.4.1",
     "react-native-safe-area-context": "^5.4.1",
