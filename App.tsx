@@ -1,12 +1,13 @@
 import React from 'react';
 import MainNavigator from './src/navigation';
 import { View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 function App(): React.JSX.Element {
     return (
-      <View style={{ flex: 1 }}>
+      <GestureHandlerRootView style={{ flex: 1 }}>
         <MainNavigator />
-      </View>
+      </GestureHandlerRootView >
     );
 }
 
