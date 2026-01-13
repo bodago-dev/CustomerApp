@@ -170,6 +170,8 @@ const OtpVerificationScreen = ({ route, navigation }) => {
                   maxLength={1}
                   editable={!isVerifying}
                   selectTextOnFocus={!isVerifying}
+                  // Add this line to make text visible
+                  placeholderTextColor="#999"
                 />
               ))}
             </View>
@@ -262,6 +264,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
     backgroundColor: '#fff',
+    color: '#000',
   },
   errorInput: {
     borderColor: '#ff6b6b',
