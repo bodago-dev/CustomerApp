@@ -256,13 +256,15 @@ const LocationSelectionScreen = ({ route, navigation }) => {
   };
 
   const handleMapPress = async (event) => {
+    console.log('Map pressed at:', event.nativeEvent.coordinate);
     const { coordinate } = event.nativeEvent;
 
     // Determine which field to set based on current state
     let fieldToSet = activeField;
+    
     if (!pickupLocation) {
       fieldToSet = 'pickup';
-    } else if (!dropoffLocation) {
+    } else if (!dropoffLocation && activeField === 'pickup') {
       fieldToSet = 'dropoff';
     }
 
@@ -396,50 +398,50 @@ const LocationSelectionScreen = ({ route, navigation }) => {
         style={styles.map}
         region={mapRegion}
         onPress={handleMapPress}
-        onMapReady={() => {
-          setMapLoaded(true);
-          // Ensure map is focused on Tanzania
-          setTimeout(() => {
-            if (mapRef.current) {
-              mapRef.current.animateToRegion(TANZANIA_REGION, 1000);
-            }
-          }, 100);
-        }}
-        mapType="standard"
-        userInterfaceStyle="light"
-        showsUserLocation={true}
-        showsMyLocationButton={true}
-        showsCompass={true}
-        showsScale={true}
-        zoomEnabled={true}
-        scrollEnabled={true}
-        rotateEnabled={true}
-        pitchEnabled={true}
-        initialRegion={TANZANIA_REGION}
-      >
-        {pickupLocation && (
-          <Marker
-            coordinate={pickupLocation.coordinates}
-            title={pickupLocation.name}
-            description={pickupLocation.address}
-            pinColor="#0066cc"
-          >
-            <View style={styles.markerContainer}>
-              <Ionicons name="locate" size={20} color="#fff" />
-            </View>
-          </Marker>
-        )}
-        {dropoffLocation && (
-          <Marker
-            coordinate={dropoffLocation.coordinates}
-            title={dropoffLocation.name}
-            description={dropoffLocation.address}
-            pinColor="#ff6b6b"
-          >
-            <View style={styles.markerContainer}>
-              <Ionicons name="location" size={20} color="#fff" />
-            </View>
-          </Marker>
+          onMapReady={() => {
+            setMapLoaded(true);
+            // Ensure map is focused on Tanzania
+            setTimeout(() => {
+              if (mapRef.current) {
+                mapRef.current.animateToRegion(TANZANIA_REGION, 1000);
+              }
+            }, 100);
+          }}
+          mapType="standard"
+          userInterfaceStyle="light"
+          showsUserLocation={true}
+          showsMyLocationButton={true}
+          showsCompass={true}
+          showsScale={true}
+          zoomEnabled={true}
+          scrollEnabled={true}
+          rotateEnabled={true}
+          pitchEnabled={true}
+          initialRegion={TANZANIA_REGION}
+        >
+          {pickupLocation && (
+            <Marker
+              coordinate={pickupLocation.coordinates}
+              title={pickupLocation.name}
+              description={pickupLocation.address}
+              pinColor="#0066cc"
+            >
+              <View style={styles.markerContainer}>
+                <Ionicons name="locate" size={20} color="#fff" />
+              </View>
+            </Marker>
+          )}
+          {dropoffLocation && (
+            <Marker
+              coordinate={dropoffLocation.coordinates}
+              title={dropoffLocation.name}
+              description={dropoffLocation.address}
+              pinColor="#ff6b6b"
+            >
+              <View style={styles.markerContainer}>
+                <Ionicons name="location" size={20} color="#fff" />
+              </View>
+            </Marker>
         )}
       </MapView>
 
@@ -462,124 +464,124 @@ const LocationSelectionScreen = ({ route, navigation }) => {
         keyboardBehavior="interactive"
         keyboardBlurBehavior="restore"
       >
-        <BottomSheetView style={styles.sheetContent}>
-          <Text style={styles.panelTitle}>Your Delivery Route</Text>
+          <BottomSheetView style={styles.sheetContent}>
+            <Text style={styles.panelTitle}>Your Delivery Route</Text>
 
-          {/* Pickup Location */}
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Pickup Location</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="locate" size={20} color="#0066cc" style={styles.inputIcon} />
-              <TextInput
-                style={styles.textInput}
-                placeholder="Enter pickup location"
-                placeholderTextColor="#666"
-                value={pickupQuery}
-                onChangeText={(text) => {
-                  setPickupQuery(text);
-                  fetchPlacePredictions(text, 'pickup');
-                }}
-                onFocus={() => handleInputFocus('pickup')}
-                onBlur={handleInputBlur}
-                returnKeyType="done"
-              />
-              {pickupLocation && (
-                <TouchableOpacity
-                  style={styles.clearButton}
-                  onPress={() => {
-                    setPickupLocation(null);
-                    setPickupQuery('');
-                    setPickupSuggestions([]);
-                    setShowPickupSuggestions(false);
+            {/* Pickup Location */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Pickup Location</Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="locate" size={20} color="#0066cc" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Enter pickup location"
+                  placeholderTextColor="#666"
+                  value={pickupQuery}
+                  onChangeText={(text) => {
+                    setPickupQuery(text);
+                    fetchPlacePredictions(text, 'pickup');
                   }}
-                >
-                  <Ionicons name="close-circle" size={18} color="#999" />
-                </TouchableOpacity>
+                  onFocus={() => handleInputFocus('pickup')}
+                  onBlur={handleInputBlur}
+                  returnKeyType="done"
+                />
+                {pickupLocation && (
+                  <TouchableOpacity
+                    style={styles.clearButton}
+                    onPress={() => {
+                      setPickupLocation(null);
+                      setPickupQuery('');
+                      setPickupSuggestions([]);
+                      setShowPickupSuggestions(false);
+                    }}
+                  >
+                    <Ionicons name="close-circle" size={18} color="#999" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Pickup Suggestions */}
+              {showPickupSuggestions && pickupSuggestions.length > 0 && (
+                <View style={styles.suggestionsContainer}>
+                  <FlatList
+                    data={pickupSuggestions}
+                    renderItem={(item) => renderSuggestionItem(item, 'pickup')}
+                    keyExtractor={(item) => item.place_id}
+                    style={styles.suggestionsList}
+                    keyboardShouldPersistTaps="handled"
+                  />
+                </View>
               )}
             </View>
 
-            {/* Pickup Suggestions */}
-            {showPickupSuggestions && pickupSuggestions.length > 0 && (
-              <View style={styles.suggestionsContainer}>
-                <FlatList
-                  data={pickupSuggestions}
-                  renderItem={(item) => renderSuggestionItem(item, 'pickup')}
-                  keyExtractor={(item) => item.place_id}
-                  style={styles.suggestionsList}
-                  keyboardShouldPersistTaps="handled"
-                />
-              </View>
-            )}
-          </View>
-
-          {/* Dropoff Location */}
-          <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Dropoff Location</Text>
-            <View style={styles.inputWrapper}>
-              <Ionicons name="location" size={20} color="#ff6b6b" style={styles.inputIcon} />
-              <TextInput
-                style={styles.textInput}
-                placeholder="Enter dropoff location"
-                placeholderTextColor="#666"
-                value={dropoffQuery}
-                onChangeText={(text) => {
-                  setDropoffQuery(text);
-                  fetchPlacePredictions(text, 'dropoff');
-                }}
-                onFocus={() => handleInputFocus('dropoff')}
-                onBlur={handleInputBlur}
-                returnKeyType="done"
-              />
-              {dropoffLocation && (
-                <TouchableOpacity
-                  style={styles.clearButton}
-                  onPress={() => {
-                    setDropoffLocation(null);
-                    setDropoffQuery('');
-                    setDropoffSuggestions([]);
-                    setShowDropoffSuggestions(false);
+            {/* Dropoff Location */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.inputLabel}>Dropoff Location</Text>
+              <View style={styles.inputWrapper}>
+                <Ionicons name="location" size={20} color="#ff6b6b" style={styles.inputIcon} />
+                <TextInput
+                  style={styles.textInput}
+                  placeholder="Enter dropoff location"
+                  placeholderTextColor="#666"
+                  value={dropoffQuery}
+                  onChangeText={(text) => {
+                    setDropoffQuery(text);
+                    fetchPlacePredictions(text, 'dropoff');
                   }}
-                >
-                  <Ionicons name="close-circle" size={18} color="#999" />
-                </TouchableOpacity>
+                  onFocus={() => handleInputFocus('dropoff')}
+                  onBlur={handleInputBlur}
+                  returnKeyType="done"
+                />
+                {dropoffLocation && (
+                  <TouchableOpacity
+                    style={styles.clearButton}
+                    onPress={() => {
+                      setDropoffLocation(null);
+                      setDropoffQuery('');
+                      setDropoffSuggestions([]);
+                      setShowDropoffSuggestions(false);
+                    }}
+                  >
+                    <Ionicons name="close-circle" size={18} color="#999" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Dropoff Suggestions */}
+              {showDropoffSuggestions && dropoffSuggestions.length > 0 && (
+                <View style={styles.suggestionsContainer}>
+                  <FlatList
+                    data={dropoffSuggestions}
+                    renderItem={(item) => renderSuggestionItem(item, 'dropoff')}
+                    keyExtractor={(item) => item.place_id}
+                    style={styles.suggestionsList}
+                    keyboardShouldPersistTaps="handled"
+                  />
+                </View>
               )}
             </View>
 
-            {/* Dropoff Suggestions */}
-            {showDropoffSuggestions && dropoffSuggestions.length > 0 && (
-              <View style={styles.suggestionsContainer}>
-                <FlatList
-                  data={dropoffSuggestions}
-                  renderItem={(item) => renderSuggestionItem(item, 'dropoff')}
-                  keyExtractor={(item) => item.place_id}
-                  style={styles.suggestionsList}
-                  keyboardShouldPersistTaps="handled"
-                />
-              </View>
-            )}
-          </View>
+            {/* Map Selection Hint */}
+            <View style={styles.panelHint}>
+              <Ionicons name="map-outline" size={16} color="#666" />
+              <Text style={styles.panelHintText}>
+                Tip: You can also tap directly on the map to select a location
+              </Text>
+            </View>
 
-          {/* Map Selection Hint */}
-          <View style={styles.panelHint}>
-            <Ionicons name="map-outline" size={16} color="#666" />
-            <Text style={styles.panelHintText}>
-              Tip: You can also tap directly on the map to select a location
-            </Text>
-          </View>
-
-          {/* Continue Button */}
-          <TouchableOpacity
-            style={[
-              styles.continueButton,
-              (!pickupLocation || !dropoffLocation) && styles.disabledButton,
-            ]}
-            onPress={handleContinue}
-            disabled={!pickupLocation || !dropoffLocation}
-          >
-            <Text style={styles.continueButtonText}>Continue</Text>
-            <Ionicons name="arrow-forward" size={20} color="#fff" />
-          </TouchableOpacity>
-        </BottomSheetView>
+            {/* Continue Button */}
+            <TouchableOpacity
+              style={[
+                styles.continueButton,
+                (!pickupLocation || !dropoffLocation) && styles.disabledButton,
+              ]}
+              onPress={handleContinue}
+              disabled={!pickupLocation || !dropoffLocation}
+            >
+              <Text style={styles.continueButtonText}>Continue</Text>
+              <Ionicons name="arrow-forward" size={20} color="#fff" />
+            </TouchableOpacity>
+          </BottomSheetView>
       </BottomSheet>
     </GestureHandlerRootView>
   );
@@ -590,8 +592,12 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
+  mapContainer: {
+    flex: 1,
+  },
   map: {
     flex: 1,
+    zIndex: 0,
   },
   sheetHandle: {
     alignItems: 'center',
