@@ -258,11 +258,12 @@ const LocationSelectionScreen = ({ route, navigation }) => {
   const handleMapPress = async (event) => {
     const { coordinate } = event.nativeEvent;
 
-    // Set active field based on which location is not set yet
+    // Determine which field to set based on current state
+    let fieldToSet = activeField;
     if (!pickupLocation) {
-      setActiveField('pickup');
+      fieldToSet = 'pickup';
     } else if (!dropoffLocation) {
-      setActiveField('dropoff');
+      fieldToSet = 'dropoff';
     }
 
     // Dismiss keyboard if open
@@ -290,27 +291,35 @@ const LocationSelectionScreen = ({ route, navigation }) => {
           details: firstResult,
         };
 
-        if (activeField === 'pickup') {
+        if (fieldToSet === 'pickup') {
           setPickupLocation(newLocation);
           setPickupQuery(firstResult.formatted_address);
+          setActiveField('pickup');
+          console.log('Map tap: Set as Pickup Location:', newLocation);
         } else {
           setDropoffLocation(newLocation);
           setDropoffQuery(firstResult.formatted_address);
+          setActiveField('dropoff');
+          console.log('Map tap: Set as Dropoff Location:', newLocation);
         }
       } else {
         const newLocation = {
           id: `custom-${Date.now()}`,
-          name: activeField === 'pickup' ? 'Pickup Location' : 'Dropoff Location',
+          name: fieldToSet === 'pickup' ? 'Pickup Location' : 'Dropoff Location',
           address: `Lat: ${coordinate.latitude.toFixed(4)}, Lng: ${coordinate.longitude.toFixed(4)}`,
           coordinates: coordinate,
         };
 
-        if (activeField === 'pickup') {
+        if (fieldToSet === 'pickup') {
           setPickupLocation(newLocation);
           setPickupQuery(newLocation.address);
+          setActiveField('pickup');
+          console.log('Map tap: Set as Pickup Location (no address):', newLocation);
         } else {
           setDropoffLocation(newLocation);
           setDropoffQuery(newLocation.address);
+          setActiveField('dropoff');
+          console.log('Map tap: Set as Dropoff Location (no address):', newLocation);
         }
       }
 
@@ -550,6 +559,14 @@ const LocationSelectionScreen = ({ route, navigation }) => {
             )}
           </View>
 
+          {/* Map Selection Hint */}
+          <View style={styles.panelHint}>
+            <Ionicons name="map-outline" size={16} color="#666" />
+            <Text style={styles.panelHintText}>
+              Tip: You can also tap directly on the map to select a location
+            </Text>
+          </View>
+
           {/* Continue Button */}
           <TouchableOpacity
             style={[
@@ -744,6 +761,22 @@ const styles = StyleSheet.create({
     marginTop: 10,
     fontSize: 12,
     color: '#333',
+  },
+  panelHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#f8f9fa',
+    padding: 12,
+    borderRadius: 8,
+    marginTop: 5,
+    marginBottom: 15,
+  },
+  panelHintText: {
+    fontSize: 13,
+    color: '#666',
+    marginLeft: 8,
+    textAlign: 'center',
   },
 });
 
