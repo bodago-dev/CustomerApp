@@ -15,7 +15,7 @@ import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import Config from 'react-native-config';
 import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+// Removed duplicate GestureHandlerRootView import as it's already in App.tsx
 
 const { width, height } = Dimensions.get('window');
 
@@ -144,7 +144,7 @@ const LocationSelectionScreen = ({ route, navigation }) => {
 
     try {
       const response = await fetch(
-        `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${Config.GOOGLE_PLACES_API_KEY}&components=country:tz&location=${mapRegion.latitude},${mapRegion.longitude}&radius=20000`
+        `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query )}&key=${Config.GOOGLE_PLACES_API_KEY}&components=country:tz&location=${mapRegion.latitude},${mapRegion.longitude}&radius=20000`
       );
       const data = await response.json();
 
@@ -190,7 +190,7 @@ const LocationSelectionScreen = ({ route, navigation }) => {
     try {
       const response = await fetch(
         `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${Config.GOOGLE_PLACES_API_KEY}`
-      );
+       );
       const data = await response.json();
 
       console.log('Google Places Details API Response:', {
@@ -261,7 +261,7 @@ const LocationSelectionScreen = ({ route, navigation }) => {
 
     // Determine which field to set based on current state
     let fieldToSet = activeField;
-    
+
     if (!pickupLocation) {
       fieldToSet = 'pickup';
     } else if (!dropoffLocation && activeField === 'pickup') {
@@ -278,7 +278,7 @@ const LocationSelectionScreen = ({ route, navigation }) => {
       setIsLoading(true);
       const response = await fetch(
         `https://maps.googleapis.com/maps/api/geocode/json?latlng=${coordinate.latitude},${coordinate.longitude}&key=${Config.GOOGLE_PLACES_API_KEY}`
-      );
+       );
       const data = await response.json();
 
       console.log('Reverse Geocoding Response:', data);
@@ -391,7 +391,7 @@ const LocationSelectionScreen = ({ route, navigation }) => {
   );
 
   return (
-    <GestureHandlerRootView style={styles.container}>
+    <View style={styles.container}>
       <MapView
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
@@ -583,7 +583,7 @@ const LocationSelectionScreen = ({ route, navigation }) => {
             </TouchableOpacity>
           </BottomSheetView>
       </BottomSheet>
-    </GestureHandlerRootView>
+    </View>
   );
 };
 
