@@ -13,6 +13,7 @@ import {
   TextInput,
   Animated,
   Keyboard,
+  PanResponder,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -40,8 +41,11 @@ const LocationSelectionScreen = ({ route, navigation }) => {
   // Panel expansion states
   const [isPanelExpanded, setIsPanelExpanded] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
-  const panelHeight = useRef(new Animated.Value(350)).current;
-  const panelContentOpacity = useRef(new Animated.Value(1)).current;
+  
+  const MIN_PANEL_HEIGHT = 350;
+  const MAX_PANEL_HEIGHT = height * 0.8;
+  const panelHeight = useRef(new Animated.Value(MIN_PANEL_HEIGHT)).current;
+  const mapRef = useRef(null);
 
   // Initial region for Tanzania (centered on Dar es Salaam)
   const [mapRegion, setMapRegion] = useState({
@@ -75,42 +79,68 @@ const LocationSelectionScreen = ({ route, navigation }) => {
 
   // Handle panel height animation
   useEffect(() => {
-    const targetHeight = isPanelExpanded ? height * 0.8 : 350;
-    Animated.parallel([
-      Animated.timing(panelHeight, {
-        toValue: targetHeight,
-        duration: 300,
-        useNativeDriver: false,
-      }),
-      Animated.timing(panelContentOpacity, {
-        toValue: isPanelExpanded ? 1 : 1,
-        duration: 300,
-        useNativeDriver: true,
-      })
-    ]).start();
+    const targetHeight = isPanelExpanded ? MAX_PANEL_HEIGHT : MIN_PANEL_HEIGHT;
+    Animated.spring(panelHeight, {
+      toValue: targetHeight,
+      useNativeDriver: false,
+      friction: 8,
+      tension: 40,
+    }).start();
   }, [isPanelExpanded]);
 
   // Keyboard listeners
-    useEffect(() => {
-      const keyboardDidShowListener = Keyboard.addListener(
-        Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-        (e) => {
-          setIsKeyboardVisible(true);
-          // Optionally adjust panel height when keyboard appears
-          if (isPanelExpanded) {
-            Animated.timing(panelHeight, {
-              toValue: height * 0.5, // Slightly taller to accommodate keyboard
-              duration: 300,
-              useNativeDriver: false,
-            }).start();
-          }
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setIsKeyboardVisible(true);
+        if (!isPanelExpanded) {
+          setIsPanelExpanded(true);
         }
-      );
+      }
+    );
 
-      return () => {
-        keyboardDidShowListener.remove();
-      };
-    }, [isPanelExpanded]);
+    const keyboardDidHideListener = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setIsKeyboardVisible(false);
+      }
+    );
+
+    return () => {
+      keyboardDidShowListener.remove();
+      keyboardDidHideListener.remove();
+    };
+  }, [isPanelExpanded]);
+
+  // PanResponder for manual panel dragging
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderMove: (evt, gestureState) => {
+        const newHeight = panelHeight._value - gestureState.dy;
+        if (newHeight >= MIN_PANEL_HEIGHT && newHeight <= MAX_PANEL_HEIGHT) {
+          panelHeight.setValue(newHeight);
+        }
+      },
+      onPanResponderRelease: (evt, gestureState) => {
+        if (gestureState.dy > 50) {
+          setIsPanelExpanded(false);
+          Keyboard.dismiss();
+        } else if (gestureState.dy < -50) {
+          setIsPanelExpanded(true);
+        } else {
+          // Snap back
+          const targetHeight = isPanelExpanded ? MAX_PANEL_HEIGHT : MIN_PANEL_HEIGHT;
+          Animated.spring(panelHeight, {
+            toValue: targetHeight,
+            useNativeDriver: false,
+          }).start();
+        }
+      },
+    })
+  ).current;
 
   // Function to handle input focus
   const handleInputFocus = (field: string) => {
@@ -123,7 +153,6 @@ const LocationSelectionScreen = ({ route, navigation }) => {
 
   // Function to handle input blur
   const handleInputBlur = () => {
-    // Don't collapse automatically - only collapse when both locations are selected
     setIsKeyboardVisible(false);
   };
 
@@ -161,13 +190,6 @@ const LocationSelectionScreen = ({ route, navigation }) => {
       );
       const data = await response.json();
 
-      console.log('Google Places Autocomplete API Response:', {
-        field,
-        query,
-        status: data.status,
-        predictions: data.predictions
-      });
-
       if (data.status === 'OK' && data.predictions) {
         if (field === 'pickup') {
           setPickupSuggestions(data.predictions);
@@ -176,25 +198,9 @@ const LocationSelectionScreen = ({ route, navigation }) => {
           setDropoffSuggestions(data.predictions);
           setShowDropoffSuggestions(true);
         }
-      } else {
-        console.log('Google Places Autocomplete API Error:', data.status);
-        if (field === 'pickup') {
-          setPickupSuggestions([]);
-          setShowPickupSuggestions(false);
-        } else {
-          setDropoffSuggestions([]);
-          setShowDropoffSuggestions(false);
-        }
       }
     } catch (error) {
       console.error('Error fetching place predictions:', error);
-      if (field === 'pickup') {
-        setPickupSuggestions([]);
-        setShowPickupSuggestions(false);
-      } else {
-        setDropoffSuggestions([]);
-        setShowDropoffSuggestions(false);
-      }
     }
   };
 
@@ -205,12 +211,6 @@ const LocationSelectionScreen = ({ route, navigation }) => {
         `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${Config.GOOGLE_PLACES_API_KEY}`
       );
       const data = await response.json();
-
-      console.log('Google Places Details API Response:', {
-        field,
-        placeId,
-        result: data.result
-      });
 
       if (data.status === 'OK' && data.result) {
         const location = {
@@ -224,6 +224,13 @@ const LocationSelectionScreen = ({ route, navigation }) => {
           details: data.result,
         };
 
+        const newRegion = {
+          latitude: data.result.geometry.location.lat,
+          longitude: data.result.geometry.location.lng,
+          latitudeDelta: 0.005,
+          longitudeDelta: 0.005,
+        };
+
         if (field === 'pickup') {
           setPickupLocation(location);
           setPickupQuery(data.result.formatted_address);
@@ -234,36 +241,17 @@ const LocationSelectionScreen = ({ route, navigation }) => {
           setShowDropoffSuggestions(false);
         }
 
-        setMapRegion({
-          latitude: data.result.geometry.location.lat,
-          longitude: data.result.geometry.location.lng,
-          latitudeDelta: 0.005,
-          longitudeDelta: 0.005,
-        });
-
-        // Log the data
-        logPlaceData(
-          {
-            place_id: data.result.place_id,
-            structured_formatting: {
-              main_text: data.result.name,
-              secondary_text: data.result.formatted_address
-            },
-            description: data.result.formatted_address,
-            types: data.result.types
-          },
-          data.result,
-          field
-        );
+        setMapRegion(newRegion);
+        mapRef.current?.animateToRegion(newRegion, 1000);
       }
     } catch (error) {
       console.error('Error fetching place details:', error);
-      alert('Failed to get location details');
     }
   };
 
   const handleMapPress = async (event) => {
     const { coordinate } = event.nativeEvent;
+    console.log('Map pressed at:', coordinate);
 
     try {
       setIsLoading(true);
@@ -271,8 +259,6 @@ const LocationSelectionScreen = ({ route, navigation }) => {
         `https://maps.googleapis.com/maps/api/geocode/json?latlng=${coordinate.latitude},${coordinate.longitude}&key=${Config.GOOGLE_PLACES_API_KEY}`
       );
       const data = await response.json();
-
-      console.log('Reverse Geocoding Response:', data);
 
       if (data.results?.length > 0) {
         const firstResult = data.results[0];
@@ -309,21 +295,13 @@ const LocationSelectionScreen = ({ route, navigation }) => {
       }
     } catch (error) {
       console.error('Reverse geocoding error:', error);
-      alert('Failed to get address for this location');
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleContinue = () => {
-    if (!pickupLocation) {
-      alert('Please select a pickup location');
-      return;
-    }
-    if (!dropoffLocation) {
-      alert('Please select a dropoff location');
-      return;
-    }
+    if (!pickupLocation || !dropoffLocation) return;
     navigation.navigate('VehicleSelection', {
       packageDetails,
       pickupLocation,
@@ -355,41 +333,49 @@ const LocationSelectionScreen = ({ route, navigation }) => {
 
   return (
     <View style={styles.container}>
-      <MapView
-        provider={PROVIDER_GOOGLE}
-        style={[styles.map, isPanelExpanded && styles.collapsedMap]}
-        region={mapRegion}
-        onPress={handleMapPress}
-        onMapReady={() => setMapLoaded(true)}
-        mapType="standard"
-        userInterfaceStyle="light"
-        showsUserLocation={true}
-        showsMyLocationButton={true}
-      >
-        {pickupLocation && (
-          <Marker
-            coordinate={pickupLocation.coordinates}
-            title={pickupLocation.name}
-            description={pickupLocation.address}
-            pinColor="#0066cc"
-          />
-        )}
-        {dropoffLocation && (
-          <Marker
-            coordinate={dropoffLocation.coordinates}
-            title={dropoffLocation.name}
-            description={dropoffLocation.address}
-            pinColor="#ff6b6b"
-          />
-        )}
-      </MapView>
+      <View style={styles.mapContainer}>
+        <MapView
+          ref={mapRef}
+          provider={PROVIDER_GOOGLE}
+          style={styles.map}
+          initialRegion={mapRegion}
+          onPress={handleMapPress}
+          onMapReady={() => {
+            setMapLoaded(true);
+            mapRef.current?.animateToRegion(mapRegion, 1000);
+          }}
+          mapType="standard"
+          userInterfaceStyle="light"
+          showsUserLocation={true}
+          showsMyLocationButton={true}
+        >
+          {pickupLocation && (
+            <Marker
+              coordinate={pickupLocation.coordinates}
+              title={pickupLocation.name}
+              description={pickupLocation.address}
+              pinColor="#0066cc"
+            />
+          )}
+          {dropoffLocation && (
+            <Marker
+              coordinate={dropoffLocation.coordinates}
+              title={dropoffLocation.name}
+              description={dropoffLocation.address}
+              pinColor="#ff6b6b"
+            />
+          )}
+        </MapView>
+      </View>
 
-      <Animated.View style={[styles.inputPanel, { height: panelHeight }]}>
-        <View style={styles.panelHandle}>
+      <Animated.View 
+        style={[styles.inputPanel, { height: panelHeight }]}
+      >
+        <View {...panResponder.panHandlers} style={styles.panelHandle}>
           <View style={styles.panelHandleBar} />
         </View>
 
-        <Animated.View style={[styles.panelContent, { opacity: panelContentOpacity }]}>
+        <View style={styles.panelContent}>
           <Text style={styles.panelTitle}>Your Delivery Route</Text>
 
           {/* Pickup Location */}
@@ -400,7 +386,7 @@ const LocationSelectionScreen = ({ route, navigation }) => {
               <TextInput
                 style={styles.textInput}
                 placeholder="Enter pickup location"
-                placeholderTextColor="#187814"
+                placeholderTextColor="#999"
                 value={pickupQuery}
                 onChangeText={(text) => {
                   setPickupQuery(text);
@@ -424,7 +410,6 @@ const LocationSelectionScreen = ({ route, navigation }) => {
               )}
             </View>
 
-            {/* Pickup Suggestions */}
             {showPickupSuggestions && pickupSuggestions.length > 0 && (
               <View style={styles.suggestionsContainer}>
                 <FlatList
@@ -446,7 +431,7 @@ const LocationSelectionScreen = ({ route, navigation }) => {
               <TextInput
                 style={styles.textInput}
                 placeholder="Enter dropoff location"
-                placeholderTextColor="#a10603"
+                placeholderTextColor="#999"
                 value={dropoffQuery}
                 onChangeText={(text) => {
                   setDropoffQuery(text);
@@ -470,7 +455,6 @@ const LocationSelectionScreen = ({ route, navigation }) => {
               )}
             </View>
 
-            {/* Dropoff Suggestions */}
             {showDropoffSuggestions && dropoffSuggestions.length > 0 && (
               <View style={styles.suggestionsContainer}>
                 <FlatList
@@ -496,8 +480,14 @@ const LocationSelectionScreen = ({ route, navigation }) => {
             <Text style={styles.continueButtonText}>Continue</Text>
             <Ionicons name="arrow-forward" size={20} color="#fff" />
           </TouchableOpacity>
-        </Animated.View>
+        </View>
       </Animated.View>
+      
+      {isLoading && (
+        <View style={styles.loaderContainer}>
+          <ActivityIndicator size="large" color="#0066cc" />
+        </View>
+      )}
     </View>
   );
 };
@@ -507,14 +497,13 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
-  keyboardAvoidingView: {
+  mapContainer: {
     flex: 1,
+    width: '100%',
+    height: '100%',
   },
   map: {
-    flex: 1,
-  },
-  collapsedMap: {
-    height: '20%',
+    ...StyleSheet.absoluteFillObject,
   },
   inputPanel: {
     position: 'absolute',
@@ -522,35 +511,36 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 25,
+    borderTopRightRadius: 25,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 5,
-    overflow: 'hidden',
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 20,
+    zIndex: 10,
   },
   panelContent: {
     flex: 1,
     padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 30 : 20,
+    paddingBottom: Platform.OS === 'ios' ? 40 : 20,
   },
   panelHandle: {
     alignItems: 'center',
-    paddingTop: 8,
+    paddingVertical: 12,
+    width: '100%',
   },
   panelHandleBar: {
     width: 40,
-    height: 4,
-    backgroundColor: '#ccc',
-    borderRadius: 2,
+    height: 5,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 3,
   },
   panelTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 10,
+    marginBottom: 20,
     textAlign: 'center',
   },
   inputContainer: {
@@ -560,17 +550,16 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
+    color: '#666',
     marginBottom: 8,
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 10,
-    backgroundColor: '#f5f5f5',
-    position: 'relative',
+    borderColor: '#F0F0F0',
+    borderRadius: 12,
+    backgroundColor: '#F8F9FA',
   },
   textInput: {
     flex: 1,
@@ -578,7 +567,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#333',
     paddingHorizontal: 45,
-    paddingRight: 40,
   },
   inputIcon: {
     position: 'absolute',
@@ -597,17 +585,17 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: '#fff',
-    borderRadius: 10,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: '#F0F0F0',
     marginTop: 5,
     maxHeight: 200,
     zIndex: 1000,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 10,
+    shadowRadius: 8,
+    elevation: 5,
   },
   suggestionsList: {
     flex: 1,
@@ -617,48 +605,48 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: '#F8F9FA',
   },
   suggestionIcon: {
-    marginRight: 10,
+    marginRight: 12,
   },
   suggestionTextContainer: {
     flex: 1,
   },
   suggestionMainText: {
-    fontSize: 14,
+    fontSize: 15,
     color: '#333',
     fontWeight: '500',
   },
   suggestionSecondaryText: {
-    fontSize: 12,
-    color: '#666',
+    fontSize: 13,
+    color: '#999',
     marginTop: 2,
   },
   continueButton: {
     backgroundColor: '#0066cc',
-    borderRadius: 10,
+    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 16,
     marginTop: 10,
-    shadowColor: '#0066cc',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-    elevation: 5,
   },
   disabledButton: {
-    backgroundColor: '#a0c8f0',
-    shadowOpacity: 0.1,
-    elevation: 2,
+    backgroundColor: '#E0E0E0',
   },
   continueButtonText: {
     color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: 'bold',
     marginRight: 10,
+  },
+  loaderContainer: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(255, 255, 255, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 20,
   },
 });
 
