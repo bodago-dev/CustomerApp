@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,15 +7,16 @@ import {
   Dimensions,
   ActivityIndicator,
   Platform,
-  Keyboard,
+  KeyboardAvoidingView,
+  Modal,
   FlatList,
   TextInput,
+  Animated,
+  Keyboard,
 } from 'react-native';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import Config from 'react-native-config';
-import BottomSheet, { BottomSheetView } from '@gorhom/bottom-sheet';
-// Removed duplicate GestureHandlerRootView import as it's already in App.tsx
 
 const { width, height } = Dimensions.get('window');
 
@@ -27,7 +28,6 @@ const LocationSelectionScreen = ({ route, navigation }) => {
   const [isLoading, setIsLoading] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [apiReady, setApiReady] = useState(false);
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
 
   // New states for custom autocomplete
   const [pickupQuery, setPickupQuery] = useState('');
@@ -37,82 +37,95 @@ const LocationSelectionScreen = ({ route, navigation }) => {
   const [showPickupSuggestions, setShowPickupSuggestions] = useState(false);
   const [showDropoffSuggestions, setShowDropoffSuggestions] = useState(false);
 
-  // Bottom sheet ref and snap points
-  const bottomSheetRef = useRef<BottomSheet>(null);
-  const snapPoints = useMemo(() => [350, height * 0.8], []);
-  const mapRef = useRef<MapView>(null);
+  // Panel expansion states
+  const [isPanelExpanded, setIsPanelExpanded] = useState(false);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const panelHeight = useRef(new Animated.Value(350)).current;
+  const panelContentOpacity = useRef(new Animated.Value(1)).current;
 
-  // Tanzania default region (Dar es Salaam area)
-  const TANZANIA_REGION = {
+  // Initial region for Tanzania (centered on Dar es Salaam)
+  const [mapRegion, setMapRegion] = useState({
     latitude: -6.7924,
     longitude: 39.2083,
     latitudeDelta: 0.0922,
     longitudeDelta: 0.0421,
-  };
-
-  const [mapRegion, setMapRegion] = useState(TANZANIA_REGION);
+  });
 
   useEffect(() => {
     console.log('API Key from Config:', Config.GOOGLE_PLACES_API_KEY);
     setApiReady(!!Config.GOOGLE_PLACES_API_KEY);
-
-    // Focus map on Tanzania region when component loads
-    setTimeout(() => {
-      if (mapRef.current) {
-        mapRef.current.animateToRegion(TANZANIA_REGION, 1000);
-      }
-    }, 500);
   }, []);
 
-  // Handle keyboard visibility
+  // Handle panel expansion/collapse based on location selection
   useEffect(() => {
-    const keyboardDidShowListener = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
-      () => {
-        setIsKeyboardVisible(true);
-        // Expand sheet when keyboard appears (for input focus)
-        bottomSheetRef.current?.expand();
-      }
-    );
+    // Auto-expand panel when user starts typing in either field
+    if ((pickupQuery || dropoffQuery) && !isPanelExpanded) {
+      setIsPanelExpanded(true);
+    }
 
-    const keyboardDidHideListener = Keyboard.addListener(
-      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
-      () => {
+    // Auto-collapse panel only when both locations are selected
+    if (pickupLocation && dropoffLocation && isPanelExpanded) {
+      const timer = setTimeout(() => {
+        setIsPanelExpanded(false);
         setIsKeyboardVisible(false);
-      }
-    );
+      }, 1000); // Delay collapse to show confirmation
+      return () => clearTimeout(timer);
+    }
+  }, [pickupLocation, dropoffLocation, pickupQuery, dropoffQuery]);
 
-    return () => {
-      keyboardDidShowListener.remove();
-      keyboardDidHideListener.remove();
-    };
-  }, []);
+  // Handle panel height animation
+  useEffect(() => {
+    const targetHeight = isPanelExpanded ? height * 0.8 : 350;
+    Animated.parallel([
+      Animated.timing(panelHeight, {
+        toValue: targetHeight,
+        duration: 300,
+        useNativeDriver: false,
+      }),
+      Animated.timing(panelContentOpacity, {
+        toValue: isPanelExpanded ? 1 : 1,
+        duration: 300,
+        useNativeDriver: true,
+      })
+    ]).start();
+  }, [isPanelExpanded]);
 
-  // Handle bottom sheet changes
-  const handleSheetChanges = useCallback((index: number) => {
-    console.log('Bottom sheet index:', index);
-  }, []);
+  // Keyboard listeners
+    useEffect(() => {
+      const keyboardDidShowListener = Keyboard.addListener(
+        Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+        (e) => {
+          setIsKeyboardVisible(true);
+          // Optionally adjust panel height when keyboard appears
+          if (isPanelExpanded) {
+            Animated.timing(panelHeight, {
+              toValue: height * 0.5, // Slightly taller to accommodate keyboard
+              duration: 300,
+              useNativeDriver: false,
+            }).start();
+          }
+        }
+      );
 
-  // Function to handle input focus - expand sheet
+      return () => {
+        keyboardDidShowListener.remove();
+      };
+    }, [isPanelExpanded]);
+
+  // Function to handle input focus
   const handleInputFocus = (field: string) => {
     setActiveField(field);
-    bottomSheetRef.current?.expand();
+    if (!isPanelExpanded) {
+      setIsPanelExpanded(true);
+    }
+    setIsKeyboardVisible(true);
   };
 
   // Function to handle input blur
   const handleInputBlur = () => {
-    // Don't collapse automatically
+    // Don't collapse automatically - only collapse when both locations are selected
+    setIsKeyboardVisible(false);
   };
-
-  // Collapse sheet when both locations are selected (but not if keyboard is open)
-  useEffect(() => {
-    if (pickupLocation && dropoffLocation && !isKeyboardVisible) {
-      const timer = setTimeout(() => {
-        bottomSheetRef.current?.collapse();
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [pickupLocation, dropoffLocation, isKeyboardVisible]);
 
   // Function to log Google Places API data
   const logPlaceData = (data: any, details: any, field: string) => {
@@ -144,7 +157,7 @@ const LocationSelectionScreen = ({ route, navigation }) => {
 
     try {
       const response = await fetch(
-        `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query )}&key=${Config.GOOGLE_PLACES_API_KEY}&components=country:tz&location=${mapRegion.latitude},${mapRegion.longitude}&radius=20000`
+        `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(query)}&key=${Config.GOOGLE_PLACES_API_KEY}&components=country:tz&location=${mapRegion.latitude},${mapRegion.longitude}&radius=20000`
       );
       const data = await response.json();
 
@@ -190,7 +203,7 @@ const LocationSelectionScreen = ({ route, navigation }) => {
     try {
       const response = await fetch(
         `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${Config.GOOGLE_PLACES_API_KEY}`
-       );
+      );
       const data = await response.json();
 
       console.log('Google Places Details API Response:', {
@@ -221,18 +234,12 @@ const LocationSelectionScreen = ({ route, navigation }) => {
           setShowDropoffSuggestions(false);
         }
 
-        // Animate map to selected location
-        const newRegion = {
+        setMapRegion({
           latitude: data.result.geometry.location.lat,
           longitude: data.result.geometry.location.lng,
           latitudeDelta: 0.005,
           longitudeDelta: 0.005,
-        };
-
-        setMapRegion(newRegion);
-        if (mapRef.current) {
-          mapRef.current.animateToRegion(newRegion, 1000);
-        }
+        });
 
         // Log the data
         logPlaceData(
@@ -256,29 +263,13 @@ const LocationSelectionScreen = ({ route, navigation }) => {
   };
 
   const handleMapPress = async (event) => {
-    console.log('Map pressed at:', event.nativeEvent.coordinate);
     const { coordinate } = event.nativeEvent;
-
-    // Determine which field to set based on current state
-    let fieldToSet = activeField;
-
-    if (!pickupLocation) {
-      fieldToSet = 'pickup';
-    } else if (!dropoffLocation && activeField === 'pickup') {
-      fieldToSet = 'dropoff';
-    }
-
-    // Dismiss keyboard if open
-    Keyboard.dismiss();
-
-    // Expand sheet to show the input
-    bottomSheetRef.current?.expand();
 
     try {
       setIsLoading(true);
       const response = await fetch(
         `https://maps.googleapis.com/maps/api/geocode/json?latlng=${coordinate.latitude},${coordinate.longitude}&key=${Config.GOOGLE_PLACES_API_KEY}`
-       );
+      );
       const data = await response.json();
 
       console.log('Reverse Geocoding Response:', data);
@@ -293,49 +284,28 @@ const LocationSelectionScreen = ({ route, navigation }) => {
           details: firstResult,
         };
 
-        if (fieldToSet === 'pickup') {
+        if (activeField === 'pickup') {
           setPickupLocation(newLocation);
           setPickupQuery(firstResult.formatted_address);
-          setActiveField('pickup');
-          console.log('Map tap: Set as Pickup Location:', newLocation);
         } else {
           setDropoffLocation(newLocation);
           setDropoffQuery(firstResult.formatted_address);
-          setActiveField('dropoff');
-          console.log('Map tap: Set as Dropoff Location:', newLocation);
         }
       } else {
         const newLocation = {
           id: `custom-${Date.now()}`,
-          name: fieldToSet === 'pickup' ? 'Pickup Location' : 'Dropoff Location',
+          name: activeField === 'pickup' ? 'Pickup Location' : 'Dropoff Location',
           address: `Lat: ${coordinate.latitude.toFixed(4)}, Lng: ${coordinate.longitude.toFixed(4)}`,
           coordinates: coordinate,
         };
 
-        if (fieldToSet === 'pickup') {
+        if (activeField === 'pickup') {
           setPickupLocation(newLocation);
           setPickupQuery(newLocation.address);
-          setActiveField('pickup');
-          console.log('Map tap: Set as Pickup Location (no address):', newLocation);
         } else {
           setDropoffLocation(newLocation);
           setDropoffQuery(newLocation.address);
-          setActiveField('dropoff');
-          console.log('Map tap: Set as Dropoff Location (no address):', newLocation);
         }
-      }
-
-      // Animate map to the tapped location
-      const newRegion = {
-        latitude: coordinate.latitude,
-        longitude: coordinate.longitude,
-        latitudeDelta: 0.005,
-        longitudeDelta: 0.005,
-      };
-
-      setMapRegion(newRegion);
-      if (mapRef.current) {
-        mapRef.current.animateToRegion(newRegion, 1000);
       }
     } catch (error) {
       console.error('Reverse geocoding error:', error);
@@ -383,206 +353,151 @@ const LocationSelectionScreen = ({ route, navigation }) => {
     </TouchableOpacity>
   );
 
-  // Render handle component for bottom sheet
-  const renderHandle = () => (
-    <View style={styles.sheetHandle}>
-      <View style={styles.sheetHandleBar} />
-    </View>
-  );
-
   return (
     <View style={styles.container}>
       <MapView
-        ref={mapRef}
         provider={PROVIDER_GOOGLE}
-        style={styles.map}
+        style={[styles.map, isPanelExpanded && styles.collapsedMap]}
         region={mapRegion}
         onPress={handleMapPress}
-          onMapReady={() => {
-            setMapLoaded(true);
-            // Ensure map is focused on Tanzania
-            setTimeout(() => {
-              if (mapRef.current) {
-                mapRef.current.animateToRegion(TANZANIA_REGION, 1000);
-              }
-            }, 100);
-          }}
-          mapType="standard"
-          userInterfaceStyle="light"
-          showsUserLocation={true}
-          showsMyLocationButton={true}
-          showsCompass={true}
-          showsScale={true}
-          zoomEnabled={true}
-          scrollEnabled={true}
-          rotateEnabled={true}
-          pitchEnabled={true}
-          initialRegion={TANZANIA_REGION}
-        >
-          {pickupLocation && (
-            <Marker
-              coordinate={pickupLocation.coordinates}
-              title={pickupLocation.name}
-              description={pickupLocation.address}
-              pinColor="#0066cc"
-            >
-              <View style={styles.markerContainer}>
-                <Ionicons name="locate" size={20} color="#fff" />
-              </View>
-            </Marker>
-          )}
-          {dropoffLocation && (
-            <Marker
-              coordinate={dropoffLocation.coordinates}
-              title={dropoffLocation.name}
-              description={dropoffLocation.address}
-              pinColor="#ff6b6b"
-            >
-              <View style={styles.markerContainer}>
-                <Ionicons name="location" size={20} color="#fff" />
-              </View>
-            </Marker>
+        onMapReady={() => setMapLoaded(true)}
+        mapType="standard"
+        userInterfaceStyle="light"
+        showsUserLocation={true}
+        showsMyLocationButton={true}
+      >
+        {pickupLocation && (
+          <Marker
+            coordinate={pickupLocation.coordinates}
+            title={pickupLocation.name}
+            description={pickupLocation.address}
+            pinColor="#0066cc"
+          />
+        )}
+        {dropoffLocation && (
+          <Marker
+            coordinate={dropoffLocation.coordinates}
+            title={dropoffLocation.name}
+            description={dropoffLocation.address}
+            pinColor="#ff6b6b"
+          />
         )}
       </MapView>
 
-      {isLoading && (
-        <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#0066cc" />
-          <Text style={styles.loadingText}>Getting address...</Text>
+      <Animated.View style={[styles.inputPanel, { height: panelHeight }]}>
+        <View style={styles.panelHandle}>
+          <View style={styles.panelHandleBar} />
         </View>
-      )}
 
-      <BottomSheet
-        ref={bottomSheetRef}
-        snapPoints={snapPoints}
-        index={0}
-        onChange={handleSheetChanges}
-        handleComponent={renderHandle}
-        enablePanDownToClose={false}
-        enableOverDrag={true}
-        animateOnMount={true}
-        keyboardBehavior="interactive"
-        keyboardBlurBehavior="restore"
-      >
-          <BottomSheetView style={styles.sheetContent}>
-            <Text style={styles.panelTitle}>Your Delivery Route</Text>
+        <Animated.View style={[styles.panelContent, { opacity: panelContentOpacity }]}>
+          <Text style={styles.panelTitle}>Your Delivery Route</Text>
 
-            {/* Pickup Location */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Pickup Location</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="locate" size={20} color="#0066cc" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="Enter pickup location"
-                  placeholderTextColor="#666"
-                  value={pickupQuery}
-                  onChangeText={(text) => {
-                    setPickupQuery(text);
-                    fetchPlacePredictions(text, 'pickup');
+          {/* Pickup Location */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Pickup Location</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="locate" size={20} color="#0066cc" style={styles.inputIcon} />
+              <TextInput
+                style={styles.textInput}
+                placeholder="Enter pickup location"
+                placeholderTextColor="#187814"
+                value={pickupQuery}
+                onChangeText={(text) => {
+                  setPickupQuery(text);
+                  fetchPlacePredictions(text, 'pickup');
+                }}
+                onFocus={() => handleInputFocus('pickup')}
+                onBlur={handleInputBlur}
+              />
+              {pickupLocation && (
+                <TouchableOpacity
+                  style={styles.clearButton}
+                  onPress={() => {
+                    setPickupLocation(null);
+                    setPickupQuery('');
+                    setPickupSuggestions([]);
+                    setShowPickupSuggestions(false);
                   }}
-                  onFocus={() => handleInputFocus('pickup')}
-                  onBlur={handleInputBlur}
-                  returnKeyType="done"
-                />
-                {pickupLocation && (
-                  <TouchableOpacity
-                    style={styles.clearButton}
-                    onPress={() => {
-                      setPickupLocation(null);
-                      setPickupQuery('');
-                      setPickupSuggestions([]);
-                      setShowPickupSuggestions(false);
-                    }}
-                  >
-                    <Ionicons name="close-circle" size={18} color="#999" />
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              {/* Pickup Suggestions */}
-              {showPickupSuggestions && pickupSuggestions.length > 0 && (
-                <View style={styles.suggestionsContainer}>
-                  <FlatList
-                    data={pickupSuggestions}
-                    renderItem={(item) => renderSuggestionItem(item, 'pickup')}
-                    keyExtractor={(item) => item.place_id}
-                    style={styles.suggestionsList}
-                    keyboardShouldPersistTaps="handled"
-                  />
-                </View>
+                >
+                  <Ionicons name="close-circle" size={18} color="#999" />
+                </TouchableOpacity>
               )}
             </View>
 
-            {/* Dropoff Location */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.inputLabel}>Dropoff Location</Text>
-              <View style={styles.inputWrapper}>
-                <Ionicons name="location" size={20} color="#ff6b6b" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.textInput}
-                  placeholder="Enter dropoff location"
-                  placeholderTextColor="#666"
-                  value={dropoffQuery}
-                  onChangeText={(text) => {
-                    setDropoffQuery(text);
-                    fetchPlacePredictions(text, 'dropoff');
-                  }}
-                  onFocus={() => handleInputFocus('dropoff')}
-                  onBlur={handleInputBlur}
-                  returnKeyType="done"
+            {/* Pickup Suggestions */}
+            {showPickupSuggestions && pickupSuggestions.length > 0 && (
+              <View style={styles.suggestionsContainer}>
+                <FlatList
+                  data={pickupSuggestions}
+                  renderItem={(item) => renderSuggestionItem(item, 'pickup')}
+                  keyExtractor={(item) => item.place_id}
+                  style={styles.suggestionsList}
+                  keyboardShouldPersistTaps="handled"
                 />
-                {dropoffLocation && (
-                  <TouchableOpacity
-                    style={styles.clearButton}
-                    onPress={() => {
-                      setDropoffLocation(null);
-                      setDropoffQuery('');
-                      setDropoffSuggestions([]);
-                      setShowDropoffSuggestions(false);
-                    }}
-                  >
-                    <Ionicons name="close-circle" size={18} color="#999" />
-                  </TouchableOpacity>
-                )}
               </View>
+            )}
+          </View>
 
-              {/* Dropoff Suggestions */}
-              {showDropoffSuggestions && dropoffSuggestions.length > 0 && (
-                <View style={styles.suggestionsContainer}>
-                  <FlatList
-                    data={dropoffSuggestions}
-                    renderItem={(item) => renderSuggestionItem(item, 'dropoff')}
-                    keyExtractor={(item) => item.place_id}
-                    style={styles.suggestionsList}
-                    keyboardShouldPersistTaps="handled"
-                  />
-                </View>
+          {/* Dropoff Location */}
+          <View style={styles.inputContainer}>
+            <Text style={styles.inputLabel}>Dropoff Location</Text>
+            <View style={styles.inputWrapper}>
+              <Ionicons name="location" size={20} color="#ff6b6b" style={styles.inputIcon} />
+              <TextInput
+                style={styles.textInput}
+                placeholder="Enter dropoff location"
+                placeholderTextColor="#a10603"
+                value={dropoffQuery}
+                onChangeText={(text) => {
+                  setDropoffQuery(text);
+                  fetchPlacePredictions(text, 'dropoff');
+                }}
+                onFocus={() => handleInputFocus('dropoff')}
+                onBlur={handleInputBlur}
+              />
+              {dropoffLocation && (
+                <TouchableOpacity
+                  style={styles.clearButton}
+                  onPress={() => {
+                    setDropoffLocation(null);
+                    setDropoffQuery('');
+                    setDropoffSuggestions([]);
+                    setShowDropoffSuggestions(false);
+                  }}
+                >
+                  <Ionicons name="close-circle" size={18} color="#999" />
+                </TouchableOpacity>
               )}
             </View>
 
-            {/* Map Selection Hint */}
-            <View style={styles.panelHint}>
-              <Ionicons name="map-outline" size={16} color="#666" />
-              <Text style={styles.panelHintText}>
-                Tip: You can also tap directly on the map to select a location
-              </Text>
-            </View>
+            {/* Dropoff Suggestions */}
+            {showDropoffSuggestions && dropoffSuggestions.length > 0 && (
+              <View style={styles.suggestionsContainer}>
+                <FlatList
+                  data={dropoffSuggestions}
+                  renderItem={(item) => renderSuggestionItem(item, 'dropoff')}
+                  keyExtractor={(item) => item.place_id}
+                  style={styles.suggestionsList}
+                  keyboardShouldPersistTaps="handled"
+                />
+              </View>
+            )}
+          </View>
 
-            {/* Continue Button */}
-            <TouchableOpacity
-              style={[
-                styles.continueButton,
-                (!pickupLocation || !dropoffLocation) && styles.disabledButton,
-              ]}
-              onPress={handleContinue}
-              disabled={!pickupLocation || !dropoffLocation}
-            >
-              <Text style={styles.continueButtonText}>Continue</Text>
-              <Ionicons name="arrow-forward" size={20} color="#fff" />
-            </TouchableOpacity>
-          </BottomSheetView>
-      </BottomSheet>
+          {/* Continue Button */}
+          <TouchableOpacity
+            style={[
+              styles.continueButton,
+              (!pickupLocation || !dropoffLocation) && styles.disabledButton,
+            ]}
+            onPress={handleContinue}
+            disabled={!pickupLocation || !dropoffLocation}
+          >
+            <Text style={styles.continueButtonText}>Continue</Text>
+            <Ionicons name="arrow-forward" size={20} color="#fff" />
+          </TouchableOpacity>
+        </Animated.View>
+      </Animated.View>
     </View>
   );
 };
@@ -592,32 +507,44 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
-  mapContainer: {
+  keyboardAvoidingView: {
     flex: 1,
   },
   map: {
     flex: 1,
-    zIndex: 0,
   },
-  sheetHandle: {
-    alignItems: 'center',
-    paddingTop: 8,
-    paddingBottom: 8,
+  collapsedMap: {
+    height: '20%',
+  },
+  inputPanel: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
     backgroundColor: '#fff',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    elevation: 5,
+    overflow: 'hidden',
   },
-  sheetHandleBar: {
+  panelContent: {
+    flex: 1,
+    padding: 20,
+    paddingBottom: Platform.OS === 'ios' ? 30 : 20,
+  },
+  panelHandle: {
+    alignItems: 'center',
+    paddingTop: 8,
+  },
+  panelHandleBar: {
     width: 40,
     height: 4,
     backgroundColor: '#ccc',
     borderRadius: 2,
-  },
-  sheetContent: {
-    flex: 1,
-    padding: 20,
-    paddingBottom: Platform.OS === 'ios' ? 30 : 20,
-    backgroundColor: '#fff',
   },
   panelTitle: {
     fontSize: 22,
@@ -732,57 +659,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     marginRight: 10,
-  },
-  markerContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#0066cc',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
-    elevation: 5,
-  },
-  loadingOverlay: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    marginLeft: -50,
-    marginTop: -50,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    padding: 20,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 1000,
-    width: 100,
-    height: 100,
-  },
-  loadingText: {
-    marginTop: 10,
-    fontSize: 12,
-    color: '#333',
-  },
-  panelHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#f8f9fa',
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 5,
-    marginBottom: 15,
-  },
-  panelHintText: {
-    fontSize: 13,
-    color: '#666',
-    marginLeft: 8,
-    textAlign: 'center',
   },
 });
 
