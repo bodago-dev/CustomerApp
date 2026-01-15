@@ -41,7 +41,7 @@ const LocationSelectionScreen = ({ route, navigation }) => {
   // Panel expansion states
   const [isPanelExpanded, setIsPanelExpanded] = useState(false);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
-  
+
   const MIN_PANEL_HEIGHT = 350;
   const MAX_PANEL_HEIGHT = height * 0.8;
   const panelHeight = useRef(new Animated.Value(MIN_PANEL_HEIGHT)).current;
@@ -368,7 +368,7 @@ const LocationSelectionScreen = ({ route, navigation }) => {
         </MapView>
       </View>
 
-      <Animated.View 
+      <Animated.View
         style={[styles.inputPanel, { height: panelHeight }]}
       >
         <View {...panResponder.panHandlers} style={styles.panelHandle}>
@@ -482,7 +482,7 @@ const LocationSelectionScreen = ({ route, navigation }) => {
           </TouchableOpacity>
         </View>
       </Animated.View>
-      
+
       {isLoading && (
         <View style={styles.loaderContainer}>
           <ActivityIndicator size="large" color="#0066cc" />
