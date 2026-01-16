@@ -9,7 +9,7 @@ import {
   TextInput,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
-import locationService from '../../services/LocationService';
+import fareService from '../../services/FareService';
 
 const FareEstimationScreen = ({ route, navigation }) => {
   const { packageDetails = {}, pickupLocation = {}, dropoffLocation = {}, selectedVehicle = {} } = route.params || {};
@@ -29,129 +29,23 @@ const FareEstimationScreen = ({ route, navigation }) => {
   const [promoCode, setPromoCode] = useState('');
   const [promoApplied, setPromoApplied] = useState(false);
 
-  // Base prices per km for each vehicle type (in TZS)
-  const VEHICLE_RATES = {
-    boda: {
-      baseRate: 2000,
-      perKm: 500,
-      minFare: 1000,
-    },
-    bajaji: {
-      baseRate: 3000,
-      perKm: 750,
-      minFare: 2000,
-      
-    },
-    guta: {
-      baseRate: 5000,
-      perKm: 1000,
-      minFare: 5000,
-    }
-  };
-
-  // Size multipliers only
-  const SIZE_MULTIPLIERS = {
-    small: 1.0,
-    medium: 1.5,
-    large: 1.8
-  };
-
-  const calculateDistance = async () => {
-    try {
-      if (!pickupLocation?.coordinates || !dropoffLocation?.coordinates) {
-        console.warn('Missing location coordinates, using default distance');
-        return 5; // Default 5km if coordinates missing
-      }
-
-      const distanceKm = await locationService.calculateDistance(
-        pickupLocation.coordinates,
-        dropoffLocation.coordinates
-      );
-
-      return Number(distanceKm) || 5;
-    } catch (error) {
-      console.error('Error calculating distance:', error);
-      return 5; // Fallback distance
-    }
-  };
-
   const calculateFare = async () => {
     setIsCalculating(true);
 
     try {
-      const distanceKm = await calculateDistance();
-
-      // Get vehicle rates with fallback to boda if not specified
-      const vehicleType = selectedVehicle?.id || 'boda';
-      const vehicleRates = VEHICLE_RATES[vehicleType] || VEHICLE_RATES.boda;
-
-      // Calculate base fare - covers first 3km
-      let baseFare = vehicleRates.baseRate;
-
-      // Calculate distance fare for any distance beyond 3km
-      let distanceFare = 0;
-      if (distanceKm > 3) {
-        const additionalKm = distanceKm - 3;
-        distanceFare = additionalKm * vehicleRates.perKm;
-      }
-
-      // Total fare before size multiplier
-      let totalBeforeMultiplier = baseFare + distanceFare;
-      totalBeforeMultiplier = Math.max(totalBeforeMultiplier, vehicleRates.minFare);
-
-      // Apply package size multiplier only
-      const sizeMultiplier = SIZE_MULTIPLIERS[packageDetails?.size || 'small'] || 1;
-
-      // Calculate subtotal
-      let subtotal = totalBeforeMultiplier * sizeMultiplier;
-      subtotal = Math.round(subtotal / 100) * 100;
-
-      // Calculate service fee (18% of subtotal)
-      const serviceFee = Math.round(subtotal * 0.18);
-
-      setFareDetails({
-        baseFare,
-        distanceFare: Math.round(distanceFare * sizeMultiplier),
-        packageSizeMultiplier: sizeMultiplier,
-        subtotal,
-        serviceFee,
-        total: subtotal + serviceFee,
-        distance: parseFloat(distanceKm.toFixed(1)),
-        estimatedTime: calculateEstimatedTime(distanceKm, vehicleType),
+      const details = await fareService.calculateFare({
+        pickupCoordinates: pickupLocation?.coordinates,
+        dropoffCoordinates: dropoffLocation?.coordinates,
+        vehicleType: selectedVehicle?.id,
+        packageSize: packageDetails?.size
       });
-
+      
+      setFareDetails(details);
     } catch (error) {
       console.error('Error calculating fare:', error);
-      // Fallback to default pricing
-      setFareDetails({
-        baseFare: 3500,
-        distanceFare: 1500,
-        packageSizeMultiplier: 1,
-        subtotal: 5000,
-        serviceFee: 750,
-        total: 5750,
-        distance: 5,
-        estimatedTime: '20-30 min',
-      });
     } finally {
       setIsCalculating(false);
     }
-  };
-
-  const calculateEstimatedTime = (distanceKm, vehicleType) => {
-    const averageSpeeds = {
-      boda: 30,
-      bajaji: 25,
-      guta: 20
-    };
-
-    const baseTime = 10;
-    const travelTime = (distanceKm / averageSpeeds[vehicleType]) * 60;
-    const totalTime = baseTime + travelTime;
-    const minTime = Math.max(10, Math.round(totalTime * 0.8));
-    const maxTime = Math.round(totalTime * 1.2);
-
-    return `${minTime}-${maxTime} min`;
   };
 
   const handleApplyPromo = () => {
@@ -178,7 +72,7 @@ const FareEstimationScreen = ({ route, navigation }) => {
   };
 
   const formatPrice = (price) => {
-    return `TZS ${price.toLocaleString()}`;
+    return fareService.formatPrice(price);
   };
 
   useEffect(() => {
@@ -308,32 +202,45 @@ const FareEstimationScreen = ({ route, navigation }) => {
         </View>
 
         {/* Promo Code */}
-        {/* !promoApplied && (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Promo Code</Text>
           <View style={styles.promoContainer}>
             <TextInput
               style={styles.promoInput}
               placeholder="Enter promo code"
               value={promoCode}
               onChangeText={setPromoCode}
-              onSubmitEditing={handleApplyPromo}
+              autoCapitalize="characters"
+              editable={!promoApplied}
             />
             <TouchableOpacity
-              style={styles.promoButton}
-              onPress={handleApplyPromo}>
-              <Text style={styles.promoButtonText}>Apply</Text>
+              style={[styles.promoButton, promoApplied && styles.promoButtonDisabled]}
+              onPress={handleApplyPromo}
+              disabled={promoApplied || !promoCode}>
+              <Text style={styles.promoButtonText}>
+                {promoApplied ? 'Applied' : 'Apply'}
+              </Text>
             </TouchableOpacity>
           </View>
-        ) */
-    }
+          {promoApplied && (
+            <Text style={styles.promoSuccessText}>Promo code WELCOME50 applied successfully!</Text>
+          )}
+        </View>
       </ScrollView>
 
       <View style={styles.footer}>
         <TouchableOpacity
-          style={[styles.continueButton, isProcessing && styles.disabledButton]}
+          style={styles.continueButton}
           onPress={handleContinue}
           disabled={isProcessing}>
-          <Text style={styles.continueButtonText}>Continue to Payment</Text>
-          <Ionicons name="arrow-forward" size={20} color="#fff" />
+          {isProcessing ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Text style={styles.continueButtonText}>Confirm & Continue</Text>
+              <Ionicons name="arrow-forward" size={20} color="#fff" />
+            </>
+          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -352,7 +259,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   loadingText: {
-    marginTop: 15,
+    marginTop: 10,
     fontSize: 16,
     color: '#666',
   },
@@ -373,50 +280,47 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 15,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 3,
   },
   cardTitle: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
     color: '#333',
     marginBottom: 12,
   },
   routeInfo: {
-    marginBottom: 10,
+    marginBottom: 12,
   },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 5,
   },
   locationText: {
     fontSize: 14,
-    color: '#333',
+    color: '#444',
     marginLeft: 8,
     flex: 1,
   },
   routeDivider: {
-    paddingLeft: 12,
-    height: 15,
-  },
-  routeDividerLine: {
-    width: 1,
-    height: '100%',
-    backgroundColor: '#ddd',
+    height: 12,
+    marginLeft: 7,
+    borderLeftWidth: 1,
+    borderLeftColor: '#ddd',
+    marginVertical: 2,
   },
   routeDetails: {
     flexDirection: 'row',
-    marginTop: 10,
-    paddingTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#eee',
+    paddingTop: 12,
+    marginTop: 4,
   },
   routeDetailItem: {
     flexDirection: 'row',
@@ -424,21 +328,20 @@ const styles = StyleSheet.create({
     marginRight: 20,
   },
   routeDetailText: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#666',
-    marginLeft: 5,
+    marginLeft: 4,
   },
   detailRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 10,
   },
   detailItem: {
     flex: 1,
   },
   detailLabel: {
     fontSize: 12,
-    color: '#666',
+    color: '#999',
     marginBottom: 4,
   },
   detailValueContainer: {
@@ -447,8 +350,9 @@ const styles = StyleSheet.create({
   },
   detailValue: {
     fontSize: 14,
+    fontWeight: '500',
     color: '#333',
-    marginLeft: 5,
+    marginLeft: 4,
   },
   fareItem: {
     flexDirection: 'row',
@@ -466,47 +370,54 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: '#eee',
-    marginVertical: 8,
+    marginVertical: 10,
+  },
+  discountText: {
+    color: '#2ecc71',
+    fontWeight: '500',
   },
   totalLabel: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
     color: '#333',
   },
   totalValue: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 18,
+    fontWeight: 'bold',
     color: '#0066cc',
-  },
-  discountText: {
-    color: '#4caf50',
   },
   promoContainer: {
     flexDirection: 'row',
-    marginBottom: 20,
   },
   promoInput: {
     flex: 1,
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
-    padding: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
     marginRight: 10,
-    fontSize: 16,
   },
   promoButton: {
     backgroundColor: '#0066cc',
     borderRadius: 8,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     justifyContent: 'center',
+    alignItems: 'center',
+  },
+  promoButtonDisabled: {
+    backgroundColor: '#ccc',
   },
   promoButtonText: {
     color: '#fff',
-    fontSize: 16,
     fontWeight: '600',
+    fontSize: 14,
   },
-  disabledButton: {
-    backgroundColor: '#99ccff',
+  promoSuccessText: {
+    color: '#2ecc71',
+    fontSize: 12,
+    marginTop: 8,
   },
   footer: {
     position: 'absolute',
@@ -514,7 +425,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: '#fff',
-    padding: 15,
+    padding: 16,
     borderTopWidth: 1,
     borderTopColor: '#eee',
   },

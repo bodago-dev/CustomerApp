@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,16 +6,17 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
+import fareService from '../../services/FareService';
 
 const VehicleSelectionScreen = ({ route, navigation }) => {
   const { packageDetails, pickupLocation, dropoffLocation } = route.params || {};
   
   const [selectedVehicle, setSelectedVehicle] = useState(null);
-  
-  // Vehicle options based on package size and weight
-  const vehicleOptions = [
+  const [isLoading, setIsLoading] = useState(true);
+  const [vehicleOptions, setVehicleOptions] = useState([
     {
       id: 'boda',
       name: 'Boda Boda',
@@ -23,7 +24,7 @@ const VehicleSelectionScreen = ({ route, navigation }) => {
       image: require('../../assets/boda.png'),
       description: 'Motorcycle delivery',
       estimatedTime: '15-25 min',
-      price: 3500, // TZS
+      price: 0,
       suitableFor: 'Small packages up to 25kg',
       available: true,
     },
@@ -34,7 +35,7 @@ const VehicleSelectionScreen = ({ route, navigation }) => {
       image: require('../../assets/bajaji.png'),
       description: 'Bajaji delivery',
       estimatedTime: '20-30 min',
-      price: 5000, // TZS
+      price: 0,
       suitableFor: 'Medium packages 25kg to 75kg',
       available: true,
     },
@@ -45,37 +46,50 @@ const VehicleSelectionScreen = ({ route, navigation }) => {
       image: require('../../assets/guta.png'),
       description: 'Guta delivery',
       estimatedTime: '25-40 min',
-      price: 8000, // TZS
+      price: 0,
       suitableFor: 'Large packages 75kg and above',
       available: true,
     },
-  ];
+  ]);
 
-  // Filter available vehicles based on package size and weight
-  const getAvailableVehicles = () => {
-    if (!packageDetails) return vehicleOptions;
+  useEffect(() => {
+    loadFareEstimates();
+  }, []);
 
-    const { size } = packageDetails;
+  const loadFareEstimates = async () => {
+    setIsLoading(true);
+    try {
+      const updatedOptions = await Promise.all(vehicleOptions.map(async (vehicle) => {
+        const fareDetails = await fareService.calculateFare({
+          pickupCoordinates: pickupLocation?.coordinates,
+          dropoffCoordinates: dropoffLocation?.coordinates,
+          vehicleType: vehicle.id,
+          packageSize: packageDetails?.size
+        });
 
-    if (size === 'large') {
-      // Only Guta can handle large packages
-      return vehicleOptions.map(vehicle => ({
-        ...vehicle,
-        available: vehicle.id === 'guta',
+        // Check availability based on package size
+        let available = true;
+        if (packageDetails?.size === 'large') {
+          available = vehicle.id === 'guta';
+        } else if (packageDetails?.size === 'medium') {
+          available = vehicle.id !== 'boda';
+        }
+
+        return {
+          ...vehicle,
+          price: fareDetails.total,
+          estimatedTime: fareDetails.estimatedTime,
+          available
+        };
       }));
-    } else if (size === 'medium') {
-      // Bajajis and Gutas can handle medium packages
-      return vehicleOptions.map(vehicle => ({
-        ...vehicle,
-        available: vehicle.id !== 'boda',
-      }));
+
+      setVehicleOptions(updatedOptions);
+    } catch (error) {
+      console.error('Error loading fare estimates:', error);
+    } finally {
+      setIsLoading(false);
     }
-
-    // All vehicles can handle small packages
-    return vehicleOptions;
   };
-
-  const availableVehicles = getAvailableVehicles();
 
   const handleContinue = () => {
     if (!selectedVehicle) {
@@ -92,8 +106,17 @@ const VehicleSelectionScreen = ({ route, navigation }) => {
   };
 
   const formatPrice = (price) => {
-    return `TZS ${price.toLocaleString()}`;
+    return fareService.formatPrice(price);
   };
+
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#0066cc" />
+        <Text style={styles.loadingText}>Calculating estimates...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -135,7 +158,7 @@ const VehicleSelectionScreen = ({ route, navigation }) => {
         </View>
         
         <View style={styles.vehiclesContainer}>
-          {availableVehicles.map((vehicle) => (
+          {vehicleOptions.map((vehicle) => (
             <TouchableOpacity
               key={vehicle.id}
               style={[
@@ -149,7 +172,7 @@ const VehicleSelectionScreen = ({ route, navigation }) => {
                 <Image source={vehicle.image} style={styles.vehicleImage} />
                 {!vehicle.available && (
                   <View style={styles.unavailableOverlay}>
-                    <Text style={styles.unavailableText}>Not Available</Text>
+                    <Text style={styles.unavailableText}>Not Suitable for {packageDetails?.size} package</Text>
                   </View>
                 )}
               </View>
@@ -228,9 +251,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  loadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#666',
+  },
   scrollContent: {
     padding: 20,
-    paddingBottom: 100, // Extra padding for footer
+    paddingBottom: 100,
   },
   title: {
     fontSize: 24,
@@ -335,7 +369,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   unavailableText: {
-    color: '#999',
+    color: '#fff',
+    fontWeight: 'bold',
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
   vehicleDetails: {
     padding: 15,
