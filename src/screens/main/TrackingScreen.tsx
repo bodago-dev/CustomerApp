@@ -49,6 +49,29 @@ const TrackingScreen = ({ route, navigation }) => {
     deliveryStatusRef.current = deliveryStatus;
   }, [deliveryStatus]);
 
+  // Update ETA when driver location or delivery status changes
+  useEffect(() => {
+    if (driverLocation && deliveryData) {
+      let destination = null;
+
+      // If driver is heading to pickup
+      if (['accepted', 'arrived_pickup'].includes(deliveryStatus)) {
+        destination = deliveryData.pickupLocation?.coordinates;
+      }
+      // If driver is heading to dropoff
+      else if (deliveryStatus === 'in_transit') {
+        destination = deliveryData.dropoffLocation?.coordinates;
+      }
+
+      if (destination) {
+        const etaInfo = locationService.calculateETA(driverLocation, destination);
+        setEstimatedArrival(`ETA: ${etaInfo.formattedTime}`);
+      } else {
+        setEstimatedArrival('');
+      }
+    }
+  }, [driverLocation, deliveryData, deliveryStatus]);
+
   // Polyline decoding function for Google Directions API
   const decodePolyline = (encoded) => {
     let points = [];
