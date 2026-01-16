@@ -51,11 +51,16 @@ const TrackingScreen = ({ route, navigation }) => {
 
   // Update ETA when driver location or delivery status changes
   useEffect(() => {
+    if (deliveryStatus === 'arrived_dropoff') {
+      setEstimatedArrival('ETA: 0 min');
+      return;
+    }
+
     if (driverLocation && deliveryData) {
       let destination = null;
 
       // If driver is heading to pickup
-      if (['accepted', 'arrived_pickup'].includes(deliveryStatus)) {
+      if (deliveryStatus === 'accepted') {
         destination = deliveryData.pickupLocation?.coordinates;
       }
       // If driver is heading to dropoff

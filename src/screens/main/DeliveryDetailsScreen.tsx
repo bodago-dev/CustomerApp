@@ -319,6 +319,7 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: 16,
     fontWeight: '500',
+    color: '#333',
   },
   card: {
     backgroundColor: '#fff',
