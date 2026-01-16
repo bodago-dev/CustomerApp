@@ -21,6 +21,14 @@ import Config from 'react-native-config';
 
 const { width, height } = Dimensions.get('window');
 
+// Tanzania region centered on Dar es Salaam
+const TANZANIA_REGION = {
+  latitude: -6.7924,
+  longitude: 39.2083,
+  latitudeDelta: 0.0922,
+  longitudeDelta: 0.0421,
+};
+
 const LocationSelectionScreen = ({ route, navigation }) => {
   const { packageDetails } = route.params || {};
   const [pickupLocation, setPickupLocation] = useState(null);
@@ -47,13 +55,8 @@ const LocationSelectionScreen = ({ route, navigation }) => {
   const panelHeight = useRef(new Animated.Value(MIN_PANEL_HEIGHT)).current;
   const mapRef = useRef(null);
 
-  // Initial region for Tanzania (centered on Dar es Salaam)
-  const [mapRegion, setMapRegion] = useState({
-    latitude: -6.7924,
-    longitude: 39.2083,
-    latitudeDelta: 0.0922,
-    longitudeDelta: 0.0421,
-  });
+  // Set initial region to Tanzania
+  const [mapRegion, setMapRegion] = useState(TANZANIA_REGION);
 
   useEffect(() => {
     console.log('API Key from Config:', Config.GOOGLE_PLACES_API_KEY);
@@ -338,16 +341,29 @@ const LocationSelectionScreen = ({ route, navigation }) => {
           ref={mapRef}
           provider={PROVIDER_GOOGLE}
           style={styles.map}
-          initialRegion={mapRegion}
+          initialRegion={mapRegion} // Set initial region
+          region={mapRegion} // Control region with state
           onPress={handleMapPress}
           onMapReady={() => {
             setMapLoaded(true);
-            mapRef.current?.animateToRegion(mapRegion, 1000);
+            // Zoom to Tanzania region immediately when map loads
+            mapRef.current?.animateToRegion(TANZANIA_REGION, 1000);
+          }}
+          onRegionChangeComplete={(region) => {
+              // Optional safety net: if region looks too wide, force zoom
+              if (region.latitudeDelta > 5) {
+                mapRef.current?.animateToRegion(mapRegion, 800);
+              }
           }}
           mapType="standard"
           userInterfaceStyle="light"
           showsUserLocation={true}
           showsMyLocationButton={true}
+          showsCompass={true}
+          showsScale={true}
+          zoomEnabled={true}
+          scrollEnabled={true}
+          rotateEnabled={true}
         >
           {pickupLocation && (
             <Marker
@@ -527,12 +543,12 @@ const styles = StyleSheet.create({
   },
   panelHandle: {
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 10,
     width: '100%',
   },
   panelHandleBar: {
-    width: 40,
-    height: 5,
+    width: 50,
+    height: 7,
     backgroundColor: '#E0E0E0',
     borderRadius: 3,
   },
@@ -540,11 +556,11 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     color: '#333',
-    marginBottom: 20,
+    marginBottom: 10,
     textAlign: 'center',
   },
   inputContainer: {
-    marginBottom: 15,
+    marginBottom: 10,
     position: 'relative',
   },
   inputLabel: {
