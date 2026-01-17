@@ -49,7 +49,7 @@ const FareEstimationScreen = ({ route, navigation }) => {
   };
 
   const handleApplyPromo = () => {
-    if (promoCode.toUpperCase() === 'WELCOME50') {
+    if (promoCode.toUpperCase() === 'HALF') {
       setFareDetails(prev => ({
         ...prev,
         discount: Math.round(prev.subtotal * 0.5),
@@ -398,6 +398,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     fontSize: 14,
     marginRight: 10,
+    color: '#333',
   },
   promoButton: {
     backgroundColor: '#0066cc',
