@@ -535,6 +535,7 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 20,
     zIndex: 10,
+    justifyContent: 'flex-start',
   },
   panelContent: {
     flex: 1,

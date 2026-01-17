@@ -33,108 +33,108 @@ const PaymentScreen = ({ route, navigation }) => {
     { id: 'cash', name: 'Cash on Delivery', icon: 'cash' },
   ];
 
- const handlePayment = async () => {
-   setIsProcessing(true);
+  const handlePayment = async () => {
+    setIsProcessing(true);
 
-   try {
-     const userId = AuthService.getCurrentUser()?.uid;
-     if (!userId) throw new Error('User not authenticated');
+    try {
+      const userId = AuthService.getCurrentUser()?.uid;
+      if (!userId) throw new Error('User not authenticated');
 
-     // Prepare delivery data (for both request and delivery)
-     const deliveryData = {
-       customerId: userId,
-       customerPhone: AuthService.getCurrentUser()?.phoneNumber,
-       packageDetails,
-       pickupLocation,
-       dropoffLocation,
-       selectedVehicle,
-       fareDetails,
-       paymentMethod,
-       status: 'pending'
-     };
+      // Prepare delivery data (for both request and delivery)
+      const deliveryData = {
+        customerId: userId,
+        customerPhone: AuthService.getCurrentUser()?.phoneNumber,
+        packageDetails,
+        pickupLocation,
+        dropoffLocation,
+        selectedVehicle,
+        fareDetails,
+        paymentMethod,
+        status: 'pending'
+      };
 
-     // Prepare payment data
-     const paymentData = {
-       customerId: userId,
-       amount: fareDetails.total,
-       paymentMethod,
-       phoneNumber: paymentMethod !== 'cash' ? phoneNumber : null,
-       currency: 'TZS',
-       description: `Delivery payment for ${packageDetails.description}`,
-       metadata: {
-         packageSize: packageDetails.size,
-         vehicleType: selectedVehicle.id,
-         distance: fareDetails.distance
-       }
-     };
+      // Prepare payment data
+      const paymentData = {
+        customerId: userId,
+        amount: fareDetails.total,
+        paymentMethod,
+        phoneNumber: paymentMethod !== 'cash' ? phoneNumber : null,
+        currency: 'TZS',
+        description: `Delivery payment for ${packageDetails.description}`,
+        metadata: {
+          packageSize: packageDetails.size,
+          vehicleType: selectedVehicle.id,
+          distance: fareDetails.distance
+        }
+      };
 
-     // Use the enhanced method that creates both delivery and payment
-     const result = await FirestoreService.createDeliveryWithPayment(deliveryData, paymentData);
+      // Use the enhanced method that creates both delivery and payment
+      const result = await FirestoreService.createDeliveryWithPayment(deliveryData, paymentData);
 
-     if (!result.success) throw new Error('Failed to create delivery and payment');
+      if (!result.success) throw new Error('Failed to create delivery and payment');
 
-     console.log('Delivery request, delivery, and payment created:', result);
+      console.log('Delivery request, delivery, and payment created:', result);
 
-     if (paymentMethod === 'cash') {
-       // For cash payments, mark payment as pending until rider accepts cash payment during delivery
-       await FirestoreService.updatePaymentStatus(result.paymentId, 'pending', {
-         paidAt: serverTimestamp()
-       });
+      if (paymentMethod === 'cash') {
+        // For cash payments, mark payment as pending until rider accepts cash payment during delivery
+        await FirestoreService.updatePaymentStatus(result.paymentId, 'pending', {
+          paidAt: serverTimestamp()
+        });
 
-       navigation.navigate('Tracking', {
-           deliveryId: result.deliveryId,
-           packageDetails,
-           pickupLocation,
-           dropoffLocation,
-           selectedVehicle,
-           fareDetails,
-           paymentMethod,
-         });
-       } else {
-         // For mobile payments, simulate payment processing
-         setTimeout(async () => {
-           setIsProcessing(false);
+        navigation.navigate('Tracking', {
+            deliveryId: result.deliveryId,
+            packageDetails,
+            pickupLocation,
+            dropoffLocation,
+            selectedVehicle,
+            fareDetails,
+            paymentMethod,
+          });
+        } else {
+          // For mobile payments, simulate payment processing
+          setTimeout(async () => {
+            setIsProcessing(false);
 
-           // Update payment status to processing
-           await FirestoreService.updatePaymentStatus(result.paymentId, 'processing', {
-             transactionId: `TXN_${Date.now()}`,
-             processingAt: serverTimestamp()
-           });
+            // Update payment status to processing
+            await FirestoreService.updatePaymentStatus(result.paymentId, 'processing', {
+              transactionId: `TXN_${Date.now()}`,
+              processingAt: serverTimestamp()
+            });
 
-           Alert.alert(
-             'Payment Initiated',
-             'Please check your phone for the payment prompt and enter your PIN to complete the payment.',
-             [
-               {
-                 text: 'OK',
-                 onPress: async () => {
-                   // Simulate payment confirmation
-                   await FirestoreService.updatePaymentStatus(result.paymentId, 'paid', {
-                     paidAt: serverTimestamp(),
-                     confirmedAt: serverTimestamp()
-                   });
+            Alert.alert(
+              'Payment Initiated',
+              'Please check your phone for the payment prompt and enter your PIN to complete the payment.',
+              [
+                {
+                  text: 'OK',
+                  onPress: async () => {
+                    // Simulate payment confirmation
+                    await FirestoreService.updatePaymentStatus(result.paymentId, 'paid', {
+                      paidAt: serverTimestamp(),
+                      confirmedAt: serverTimestamp()
+                    });
 
-                   navigation.navigate('Tracking', {
-                     deliveryId: result.deliveryId,
-                     packageDetails,
-                     pickupLocation,
-                     dropoffLocation,
-                     selectedVehicle,
-                     fareDetails,
-                     paymentMethod,
-                   });
-                 },
-               },
-             ]
-           );
-         }, 2000);
-       }
-     } catch (error) {
-       console.error('Error:', error);
-       setIsProcessing(false);
-       Alert.alert('Error', 'Failed to process your order');
-     }
-   };
+                    navigation.navigate('Tracking', {
+                      deliveryId: result.deliveryId,
+                      packageDetails,
+                      pickupLocation,
+                      dropoffLocation,
+                      selectedVehicle,
+                      fareDetails,
+                      paymentMethod,
+                    });
+                  },
+                },
+              ]
+            );
+          }, 2000);
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        setIsProcessing(false);
+        Alert.alert('Error', 'Failed to process your order');
+      }
+    };
 
   const formatPrice = (price) => {
     return `TZS ${price.toLocaleString()}`;
@@ -273,7 +273,10 @@ const PaymentScreen = ({ route, navigation }) => {
                   <Ionicons name="close" size={24} color="#333" />
                 </TouchableOpacity>
               </View>
-              <ScrollView style={styles.modalBody}>
+              <ScrollView
+                style={styles.modalBody}
+                contentContainerStyle={styles.modalScrollContent}
+              >
                 <Text style={styles.legalText}>{TERMS_OF_SERVICE}</Text>
               </ScrollView>
             </View>
@@ -295,7 +298,10 @@ const PaymentScreen = ({ route, navigation }) => {
                   <Ionicons name="close" size={24} color="#333" />
                 </TouchableOpacity>
               </View>
-              <ScrollView style={styles.modalBody}>
+              <ScrollView
+                style={styles.modalBody}
+                contentContainerStyle={styles.modalScrollContent}
+              >
                 <Text style={styles.legalText}>{PRIVACY_POLICY}</Text>
               </ScrollView>
             </View>
@@ -331,7 +337,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    paddingBottom: 100, // Extra padding for footer
+    paddingBottom: 100,
   },
   title: {
     fontSize: 24,
@@ -366,38 +372,48 @@ const styles = StyleSheet.create({
     color: '#666',
     marginBottom: 12,
   },
-  paymentMethodsContainer: {
+  paymentMethodsGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
   },
   paymentMethodCard: {
-    flex: 1,
+    width: '48%',
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 12,
+    padding: 15,
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 8,
-    marginHorizontal: 5,
+    marginBottom: 15,
+    position: 'relative',
   },
   selectedPaymentMethod: {
     borderColor: '#0066cc',
     backgroundColor: '#f0f7ff',
   },
+  cashPaymentMethod: {
+    borderColor: '#4CAF50',
+  },
   paymentMethodIcon: {
     width: 40,
     height: 40,
     resizeMode: 'contain',
-    marginBottom: 8,
+    marginBottom: 5,
   },
   paymentMethodName: {
     fontSize: 14,
     color: '#333',
-    marginBottom: 4,
+    textAlign: 'center',
   },
   selectedPaymentMethodText: {
     color: '#0066cc',
     fontWeight: '500',
+  },
+  selectedIndicator: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
   },
   phoneInputContainer: {
     flexDirection: 'row',
@@ -462,6 +478,11 @@ const styles = StyleSheet.create({
     marginLeft: 5,
     flex: 1,
   },
+  linkText: {
+    color: '#0066cc',
+    textDecorationLine: 'underline',
+    fontWeight: '500',
+  },
   footer: {
     position: 'absolute',
     bottom: 0,
@@ -489,91 +510,28 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginRight: 8,
   },
-  cashPaymentMethod: {
-    borderColor: '#4CAF50',
-  },
-  cashBadge: {
-    position: 'absolute',
-    top: 5,
-    left: 5,
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  cashBadgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: 'bold',
-  },
-  paymentMethodsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-  },
-  paymentMethodCard: {
-    width: '48%', // Slightly less than half to account for spacing
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 15,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    marginBottom: 15,
-    position: 'relative',
-  },
-  selectedPaymentMethod: {
-    borderColor: '#0066cc',
-    backgroundColor: '#f0f7ff',
-  },
-  paymentMethodIcon: {
-    width: 40,
-    height: 40,
-    resizeMode: 'contain',
-    marginBottom: 5,
-  },
-  paymentMethodName: {
-    fontSize: 14,
-    color: '#333',
-    textAlign: 'center',
-  },
-  selectedPaymentMethodText: {
-    color: '#0066cc',
-    fontWeight: '500',
-  },
-  cashPaymentMethod: {
-    borderColor: '#4CAF50',
-  },
-  selectedIndicator: {
-    position: 'absolute',
-    top: 5,
-    right: 5,
-  },
-  linkText: {
-    color: '#0066cc',
-    textDecorationLine: 'underline',
-    fontWeight: '500',
-  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
   },
   modalContent: {
     backgroundColor: '#fff',
-    borderRadius: 20,
-    height: '80%',
-    margin: 20,
-    padding: 20,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    width: '100%',
+    flex: 1,
+    overflow: 'hidden',
+    marginTop: 0, // Start from top
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 15,
-    paddingBottom: 10,
+    padding: 15,
     borderBottomWidth: 1,
     borderBottomColor: '#eee',
+    backgroundColor: '#fff',
+    zIndex: 1,
   },
   modalTitle: {
     fontSize: 18,
@@ -581,13 +539,17 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   modalBody: {
-    flex: 1,
+    flexGrow: 1,
+    minHeight: 0,
+  },
+  modalScrollContent: {
+    padding: 15,
+    paddingBottom: 30, // Extra padding at bottom for better scrolling
   },
   legalText: {
     fontSize: 14,
     color: '#444',
     lineHeight: 20,
-    paddingBottom: 20,
   },
 });
 
