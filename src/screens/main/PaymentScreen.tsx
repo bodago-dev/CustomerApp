@@ -9,19 +9,23 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  Modal,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import AuthService from '../../services/AuthService';
 import FirestoreService from '../../services/FirestoreService';
 import { serverTimestamp } from '@react-native-firebase/firestore';
+import { TERMS_OF_SERVICE, PRIVACY_POLICY } from '../../components/LegalContent';
 
 const PaymentScreen = ({ route, navigation }) => {
   const { packageDetails, pickupLocation, dropoffLocation, selectedVehicle, fareDetails } = route.params || {};
-  
+
   const [paymentMethod, setPaymentMethod] = useState('mpesa');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  
+  const [showTerms, setShowTerms] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
+
   const paymentMethods = [
     { id: 'mpesa', name: 'M-Pesa', icon: require('../../assets/mpesa.jpg') },
     { id: 'mixx', name: 'Mixx by Yas', icon: require('../../assets/mixx.png') },
@@ -141,7 +145,7 @@ const PaymentScreen = ({ route, navigation }) => {
       <ScrollView contentContainerStyle={styles.scrollContent}>
         <Text style={styles.title}>Payment</Text>
         <Text style={styles.subtitle}>Choose your payment method</Text>
-        
+
         {/* Payment Methods Grid */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Payment Method</Text>
@@ -178,7 +182,7 @@ const PaymentScreen = ({ route, navigation }) => {
             ))}
           </View>
         </View>
-        
+
         {/* Phone Number Input - Only show for mobile payments */}
         {paymentMethod !== 'cash' && (
           <View style={styles.card}>
@@ -203,51 +207,102 @@ const PaymentScreen = ({ route, navigation }) => {
             </View>
           </View>
         )}
-        
+
         {/* Order Summary */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Order Summary</Text>
-          
+
           <View style={styles.summaryItem}>
             <Text style={styles.summaryLabel}>Package</Text>
             <Text style={styles.summaryValue}>
-              {packageDetails.size === 'small' ? 'Small' : 
+              {packageDetails.size === 'small' ? 'Small' :
                packageDetails.size === 'medium' ? 'Medium' : 'Large'}
             </Text>
           </View>
-          
+
           <View style={styles.summaryItem}>
             <Text style={styles.summaryLabel}>Vehicle</Text>
             <Text style={styles.summaryValue}>{selectedVehicle.name}</Text>
           </View>
-          
+
           <View style={styles.summaryItem}>
             <Text style={styles.summaryLabel}>Distance</Text>
             <Text style={styles.summaryValue}>{fareDetails.distance} km</Text>
           </View>
-          
+
           <View style={styles.summaryItem}>
             <Text style={styles.summaryLabel}>Estimated Time</Text>
             <Text style={styles.summaryValue}>{fareDetails.estimatedTime}</Text>
           </View>
-          
+
           <View style={styles.divider} />
-          
+
           <View style={styles.summaryItem}>
             <Text style={styles.totalLabel}>Total Amount</Text>
             <Text style={styles.totalValue}>{formatPrice(fareDetails.total)}</Text>
           </View>
         </View>
-        
+
         {/* Terms and Conditions */}
         <View style={styles.termsContainer}>
           <Ionicons name="information-circle-outline" size={16} color="#666" />
           <Text style={styles.termsText}>
-            By proceeding, you agree to our Terms of Service and Privacy Policy
+            By proceeding, you agree to our{' '}
+            <Text style={styles.linkText} onPress={() => setShowTerms(true)}>
+              Terms of Service
+            </Text>{' '}
+            and{' '}
+            <Text style={styles.linkText} onPress={() => setShowPrivacy(true)}>
+              Privacy Policy
+            </Text>
           </Text>
         </View>
+
+        {/* Terms of Service Modal */}
+        <Modal
+          visible={showTerms}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setShowTerms(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Terms of Service</Text>
+                <TouchableOpacity onPress={() => setShowTerms(false)}>
+                  <Ionicons name="close" size={24} color="#333" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={styles.modalBody}>
+                <Text style={styles.legalText}>{TERMS_OF_SERVICE}</Text>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Privacy Policy Modal */}
+        <Modal
+          visible={showPrivacy}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setShowPrivacy(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Privacy Policy</Text>
+                <TouchableOpacity onPress={() => setShowPrivacy(false)}>
+                  <Ionicons name="close" size={24} color="#333" />
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={styles.modalBody}>
+                <Text style={styles.legalText}>{PRIVACY_POLICY}</Text>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       </ScrollView>
-      
+
       <View style={styles.footer}>
         <TouchableOpacity
           style={[styles.payButton, isProcessing && styles.disabledButton]}
@@ -493,6 +548,46 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 5,
     right: 5,
+  },
+  linkText: {
+    color: '#0066cc',
+    textDecorationLine: 'underline',
+    fontWeight: '500',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#fff',
+    borderRadius: 20,
+    height: '80%',
+    margin: 20,
+    padding: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 15,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  modalBody: {
+    flex: 1,
+  },
+  legalText: {
+    fontSize: 14,
+    color: '#444',
+    lineHeight: 20,
+    paddingBottom: 20,
   },
 });
 
