@@ -1,5 +1,5 @@
 // src/services/AuthService.js
-import { getAuth, onAuthStateChanged, signInWithPhoneNumber, signOut, PhoneAuthProvider } from '@react-native-firebase/auth';
+import { getAuth, onAuthStateChanged, signInWithPhoneNumber, signOut, PhoneAuthProvider, signInWithCredential } from '@react-native-firebase/auth';
 import { getFirestore, doc, getDoc, setDoc, updateDoc, serverTimestamp } from '@react-native-firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -178,15 +178,15 @@ class AuthService {
     // Verify OTP and complete authentication
     async verifyOTP(verificationId, otp) {
         try {
-            console.log('AuthService.verifyOTP: Verifying OTP with verificationId:', verificationId);
+//            console.log('AuthService.verifyOTP: Verifying OTP with verificationId:', verificationId);
 
             // Create credential using verificationId and OTP
             const credential = PhoneAuthProvider.credential(verificationId, otp);
 
-            // Sign in with the credential
-            const userCredential = await this.auth.signInWithCredential(credential);
+            // Sign in with the credential (Updated to modular API)
+            const userCredential = await signInWithCredential(this.auth, credential);
             const user = userCredential.user;
-            console.log('AuthService.verifyOTP: User signed in:', user.uid);
+//            console.log('AuthService.verifyOTP: User signed in:', user.uid);
 
             // Check if user profile exists
             const userDoc = await getDoc(doc(this.db, 'users', user.uid));
