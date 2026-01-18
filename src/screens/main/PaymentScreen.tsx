@@ -276,6 +276,7 @@ const PaymentScreen = ({ route, navigation }) => {
               <ScrollView
                 style={styles.modalBody}
                 contentContainerStyle={styles.modalScrollContent}
+                showsVerticalScrollIndicator={true}
               >
                 <Text style={styles.legalText}>{TERMS_OF_SERVICE}</Text>
               </ScrollView>
@@ -301,6 +302,7 @@ const PaymentScreen = ({ route, navigation }) => {
               <ScrollView
                 style={styles.modalBody}
                 contentContainerStyle={styles.modalScrollContent}
+                showsVerticalScrollIndicator={true}
               >
                 <Text style={styles.legalText}>{PRIVACY_POLICY}</Text>
               </ScrollView>
@@ -516,12 +518,11 @@ const styles = StyleSheet.create({
   },
   modalContent: {
     backgroundColor: '#fff',
-    borderBottomLeftRadius: 20,
-    borderBottomRightRadius: 20,
+    borderRadius: 0, // Remove border radius for full-screen
     width: '100%',
-    flex: 1,
-    overflow: 'hidden',
+    flex: 1, // Take full height
     marginTop: 0, // Start from top
+    overflow: 'hidden',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -539,12 +540,12 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   modalBody: {
-    flexGrow: 1,
-    minHeight: 0,
+    flex: 1, // Takes up all available space below header
   },
   modalScrollContent: {
+    flexGrow: 1, // Important: allows content to grow and be scrollable
     padding: 15,
-    paddingBottom: 30, // Extra padding at bottom for better scrolling
+    paddingBottom: 30, // Extra padding at bottom
   },
   legalText: {
     fontSize: 14,
