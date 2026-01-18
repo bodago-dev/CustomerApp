@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Alert,
   Modal,
+  SafeAreaView,
 } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 import AuthService from '../../services/AuthService';
@@ -258,58 +259,59 @@ const PaymentScreen = ({ route, navigation }) => {
           </Text>
         </View>
 
-        {/* Terms of Service Modal */}
-        <Modal
-          visible={showTerms}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setShowTerms(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Terms of Service</Text>
-                <TouchableOpacity onPress={() => setShowTerms(false)}>
-                  <Ionicons name="close" size={24} color="#333" />
-                </TouchableOpacity>
-              </View>
-              <ScrollView
-                style={styles.modalBody}
-                contentContainerStyle={styles.modalScrollContent}
-                showsVerticalScrollIndicator={true}
-              >
-                <Text style={styles.legalText}>{TERMS_OF_SERVICE}</Text>
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
-
-        {/* Privacy Policy Modal */}
-        <Modal
-          visible={showPrivacy}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setShowPrivacy(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitle}>Privacy Policy</Text>
-                <TouchableOpacity onPress={() => setShowPrivacy(false)}>
-                  <Ionicons name="close" size={24} color="#333" />
-                </TouchableOpacity>
-              </View>
-              <ScrollView
-                style={styles.modalBody}
-                contentContainerStyle={styles.modalScrollContent}
-                showsVerticalScrollIndicator={true}
-              >
-                <Text style={styles.legalText}>{PRIVACY_POLICY}</Text>
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
       </ScrollView>
+
+      {/* Terms of Service Modal */}
+      <Modal
+        visible={showTerms}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowTerms(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <SafeAreaView style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Terms of Service</Text>
+              <TouchableOpacity onPress={() => setShowTerms(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              style={styles.modalBody}
+              contentContainerStyle={styles.modalScrollContent}
+              showsVerticalScrollIndicator={true}
+            >
+              <Text style={styles.legalText}>{TERMS_OF_SERVICE}</Text>
+            </ScrollView>
+          </SafeAreaView>
+        </View>
+      </Modal>
+
+      {/* Privacy Policy Modal */}
+      <Modal
+        visible={showPrivacy}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowPrivacy(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <SafeAreaView style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Privacy Policy</Text>
+              <TouchableOpacity onPress={() => setShowPrivacy(false)}>
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              style={styles.modalBody}
+              contentContainerStyle={styles.modalScrollContent}
+              showsVerticalScrollIndicator={true}
+            >
+              <Text style={styles.legalText}>{PRIVACY_POLICY}</Text>
+            </ScrollView>
+          </SafeAreaView>
+        </View>
+      </Modal>
 
       <View style={styles.footer}>
         <TouchableOpacity
@@ -513,45 +515,44 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-  },
-  modalContent: {
-    backgroundColor: '#fff',
-    borderRadius: 0, // Remove border radius for full-screen
-    width: '100%',
-    flex: 1, // Take full height
-    marginTop: 0, // Start from top
-    overflow: 'hidden',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-    backgroundColor: '#fff',
-    zIndex: 1,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  modalBody: {
-    flex: 1, // Takes up all available space below header
-  },
-  modalScrollContent: {
-    flexGrow: 1, // Important: allows content to grow and be scrollable
-    padding: 15,
-    paddingBottom: 30, // Extra padding at bottom
-  },
-  legalText: {
-    fontSize: 14,
-    color: '#444',
-    lineHeight: 20,
-  },
+      flex: 1,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      padding: 20,
+      paddingBottom: 50,
+    },
+    modalContent: {
+      backgroundColor: '#fff',
+      borderRadius: 20,
+      maxHeight: '80%',
+      overflow: 'hidden',
+      paddingBottom: 50,
+    },
+    modalHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      padding: 15,
+      borderBottomWidth: 1,
+      borderBottomColor: '#eee',
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: '#333',
+    },
+    modalBody: {
+      flexGrow: 0,
+      paddingBottom: 50,
+    },
+    modalScrollContent: {
+      padding: 15,
+      paddingBottom: 50,
+    },
+    legalText: {
+      fontSize: 14,
+      color: '#444',
+      lineHeight: 20,
+    },
 });
 
 export default PaymentScreen;
